@@ -8,9 +8,17 @@ from unittest.mock import patch
 from oxn.errors import PrometheusException
 from oxn.prometheus import Prometheus
 
+import warnings
+warnings.simplefilter("ignore", ResourceWarning)
+
 
 class PrometheusTests(unittest.TestCase):
-    api = Prometheus()
+
+    def setUp(self) -> None:
+        self.api = Prometheus()
+
+    def tearDown(self) -> None:
+        self.api.session.close()
 
     @patch.object(Session, "get")
     def test_all_metrics_endpoint(self, mock_get):

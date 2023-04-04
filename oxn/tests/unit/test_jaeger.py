@@ -1,4 +1,5 @@
 import unittest
+import warnings
 from unittest.mock import patch
 
 from requests import Session
@@ -6,9 +7,13 @@ from requests import Session
 from oxn.errors import JaegerException
 from oxn.jaeger import Jaeger
 
+warnings.simplefilter("ignore", ResourceWarning)
+
 
 class JaegerTests(unittest.TestCase):
-    api = Jaeger()
+
+    def setUp(self) -> None:
+        self.api = Jaeger()
 
     def tearDown(self) -> None:
         self.api.session.close()
