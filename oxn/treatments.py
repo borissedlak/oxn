@@ -65,8 +65,12 @@ class TailSamplingTreatment(Treatment):
         return "tail"
 
     def preconditions(self) -> bool:
-        """Check that the collector exists and is running"""
-        pass
+        """
+        Check that the collector exists and is running
+
+        Not implemented yet
+        """
+        return True
 
     def inject(self) -> None:
         """Write the policy to the otelcol-extras file"""
