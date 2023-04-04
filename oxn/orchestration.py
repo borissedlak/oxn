@@ -16,30 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class DockerComposeOrchestrator:
-    """Container orchestration for experiment environments
+    """
+    Container orchestration for building the system under experiment
 
     Wrapper class around docker via python-on-whales and docker-py
     to provide container orchestration features. We use python-on-whales
     for scripting around docker compose and docker-py for everything else.
 
-    The environment section in an oxn experiment specification is an abstraction
-    over configuration options for Docker, OpenTelemetry collector, Jaeger and Prometheus.
-    This class parses the environment section and translates directives found in the section
-    into yaml files with which it then provisions a system via docker compose.
-
-    For Docker, we allow users to specify an arbitrary composition of their services
-    which will then functions as the system under experiment.
-
-    For Prometheus, we allow users to specify the scraping interval globally for all
-    metrics.
-
-    For the OpenTelemetry collector, we allow users to specify a filter configuration for
-    metrics and traces. We want to allow users to configure the granularity of the observability
-    instrumentation. The highest possible granularity is offered by using the entire
-    observability instrumentation, i.e. apply no filters. We can then subsequently
-    reduce the granularity by applying filters.
-
-    We further allow users to specify tail sampling strategies with numerous policies provided by OpenTelemetry.
     """
 
     def __init__(self, experiment_config=None):
