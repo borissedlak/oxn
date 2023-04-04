@@ -16,7 +16,9 @@
 * ```http:localhost:8080/jaeger/ui``` for Jaeger
 * ```http:localhost:9090``` for Prometheus
 
-##### Install oxn (via pip)
+##### Install oxn via pip
+
+> Note: oxn requires Python >= 3.10
 
 1. Install virtualenv
 
@@ -30,9 +32,9 @@
 
 ```source venv/bin/activate```
 
-4. Install oxn requirements.
+4. Install oxn
 
-```pip install -r requirements.txt```
+```pip install . ```
 
 > Note: oxn requires the pytables package, which in turn requires a set of dependencies.
 > If you are on macOS with an M1 chip, you probably have to install these dependencies via homebrew 
@@ -62,5 +64,5 @@
 
 1. You can run observability experiments from the example directory like so 
 
-```python -m oxn examples/example_experiment.yml```
+```oxn examples/example_experiment.yml```
 
