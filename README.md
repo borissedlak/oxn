@@ -131,6 +131,27 @@ options:
 
 ```oxn experiments/delay_experiment.yml```
 
+```
+[2023-04-04 14:00:07,161] nymphbox/INFO/oxn.engine: Running experiment experiments/delay_experiment.yml for 1 times
+[2023-04-04 14:00:07,629] nymphbox/INFO/oxn.engine: Experiment run 1 of 1
+[2023-04-04 14:00:22,203] nymphbox/INFO/oxn.engine: Started sue
+[2023-04-04 14:00:22,370] nymphbox/INFO/oxn.treatments: Probed container recommendation-service for tc with result 0
+[2023-04-04 14:00:22,371] nymphbox/INFO/oxn.engine: Started load generation
+[2023-04-04 14:00:22,371] nymphbox/INFO/oxn.runner: Sleeping for 30.0 seconds
+[2023-04-04 14:00:22,371] nymphbox/INFO/locust.runners: Ramping to 1 users at a rate of 1.00 per second
+[2023-04-04 14:00:22,372] nymphbox/INFO/locust.runners: All users spawned: {"CustomLocust": 1} (1 total users)
+[2023-04-04 14:00:52,371] nymphbox/INFO/oxn.runner: Starting treatments
+[2023-04-04 14:00:52,469] nymphbox/INFO/oxn.treatments: Injected delay into container recommendation-service. Waiting for 30.0s.
+[2023-04-04 14:01:22,576] nymphbox/INFO/oxn.treatments: Cleaned delay treatment from container recommendation-service
+[2023-04-04 14:01:22,579] nymphbox/INFO/oxn.runner: Injected treatments
+[2023-04-04 14:01:22,580] nymphbox/INFO/oxn.runner: Sleeping for 30.0 seconds
+[2023-04-04 14:01:57,644] nymphbox/INFO/oxn.runner: Observed response variables
+[2023-04-04 14:01:57,660] nymphbox/INFO/oxn.engine: Stopped load generation
+[2023-04-04 14:01:57,723] nymphbox/INFO/oxn.engine: Wrote recommendation_service_traces to store
+[2023-04-04 14:02:20,375] nymphbox/INFO/oxn.engine: Stopped sue
+[2023-04-04 14:02:20,376] nymphbox/INFO/oxn.engine: Experiment run 1 of 1 completed
+```
+
 2. After the experiment is completed, open an interactive python session
 
 ```
