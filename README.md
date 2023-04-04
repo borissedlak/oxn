@@ -45,11 +45,15 @@
 >
 >  ```export BLOSC_DIR=/opt/homebrew/opt/c-blosc```
 
-5.  Run tests with make. These tests require the demo to be running.
+
+##### Tests
+> Note: Tests require the opentelemetry demo to be running and a working installation of coverage.py 
+
+1.  Run tests with make
 
 ```make coverage```
 
-6. View the coverage report (Needs coverage installed)
+2. View the coverage report 
 
 ```coverage report```
 
