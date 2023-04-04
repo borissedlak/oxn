@@ -204,11 +204,11 @@ class ExperimentRunner:
                 logger.debug(f"Deferred cleaning of treatment {treatment.name}")
         for treatment in self.treatments.values():
             if hasattr(treatment.clean, "defer_cleanup"):
+                treatment.clean()
+                treatment.end = utc_timestamp()
                 logging.info(
                     f"Treatment {treatment.name}: End time {treatment.humanize_end_time}"
                 )
-                treatment.clean()
-                treatment.end = utc_timestamp()
         self.experiment_end = utc_timestamp()
         self.observer.experiment_end = self.experiment_end
         logger.info(f"Injected treatments")
