@@ -55,9 +55,51 @@
 
 ```make coverage```
 
+
 2. View the coverage report 
 
 ```coverage report```
+
+```
+Name                                                Stmts   Miss  Cover
+-----------------------------------------------------------------------
+oxn/__init__.py                                         5      0   100%
+oxn/argparser.py                                       21      0   100%
+oxn/errors.py                                          16      4    75%
+oxn/jaeger.py                                          70     15    79%
+oxn/loadgen.py                                        111     35    68%
+oxn/models/__init__.py                                  0      0   100%
+oxn/models/response.py                                 32      3    91%
+oxn/models/treatment.py                                57      5    91%
+oxn/observer.py                                        54      2    96%
+oxn/orchestration.py                                  135     52    61%
+oxn/pricing.py                                         64      4    94%
+oxn/prometheus.py                                     110     43    61%
+oxn/responses.py                                      167     87    48%
+oxn/settings.py                                         2      0   100%
+oxn/store.py                                           99     27    73%
+oxn/tests/__init__.py                                   0      0   100%
+oxn/tests/integration/__init__.py                       0      0   100%
+oxn/tests/integration/test_pricing_integration.py      16      2    88%
+oxn/tests/integration/test_validation.py               35      0   100%
+oxn/tests/unit/__init__.py                              0      0   100%
+oxn/tests/unit/spec_mocks.py                            3      0   100%
+oxn/tests/unit/test_command_line.py                   108      0   100%
+oxn/tests/unit/test_experiment_specification.py        28      0   100%
+oxn/tests/unit/test_jaeger.py                          50      2    96%
+oxn/tests/unit/test_loadgen.py                         24      0   100%
+oxn/tests/unit/test_observer.py                        32      0   100%
+oxn/tests/unit/test_orchestration.py                   30      0   100%
+oxn/tests/unit/test_prometheus.py                      59      0   100%
+oxn/tests/unit/test_store.py                           30      0   100%
+oxn/tests/unit/test_treatments.py                      60      0   100%
+oxn/tests/unit/test_utils.py                           39      1    97%
+oxn/treatments.py                                     443    309    30%
+oxn/utils.py                                           32      1    97%
+oxn/validation.py                                     112     11    90%
+-----------------------------------------------------------------------
+TOTAL                                                2044    603    70%
+```
 
 
 ##### Run an example observability experiment
@@ -103,7 +145,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> import pandas as pd
 >>> t = Trie()
 
->>> keys = t.query(item="experiments/delay_experiment.yml")
+>>> keys = t.query(item='experiments/delay_experiment.yml')
 
 ['experiments/delay_experiment.yml/00c714c2/recommendation_service_traces']
 ```
