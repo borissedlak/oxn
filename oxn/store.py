@@ -34,7 +34,7 @@ class Trie:
     def __init__(self, disk_name=TRIE_NAME):
         self.root = Node("")
         """The root node of the trie"""
-        self.output = []
+        self.keys = []
         """List to accumulate results in"""
         self.disk_name = disk_name
         """If set, serialize and deserialize the trie from disk at the specified name. Leave blank for testing"""
@@ -59,7 +59,7 @@ class Trie:
     def depth_first_search(self, node, prefix):
         """Recursive DFS implementation"""
         if node.end:
-            self.output.append((prefix + node.character))
+            self.keys.append(prefix + node.character)
         for child in node.children.values():
             self.depth_first_search(child, prefix + node.character)
 
@@ -67,7 +67,7 @@ class Trie:
         """
         Query the trie for an item
         """
-        self.output = []
+        self.keys = []
         node = self.root
 
         for character in item:
@@ -77,7 +77,7 @@ class Trie:
                 return []
         self.depth_first_search(node, item[:-1])
 
-        return sorted(self.output, key=lambda x: x[1], reverse=True)
+        return sorted(self.keys, reverse=True)
 
     def serialize(self):
         """Write the trie to disk"""

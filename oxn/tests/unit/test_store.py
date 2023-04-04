@@ -9,7 +9,7 @@ class StoreTest(unittest.TestCase):
         self.trie = Trie(disk_name=None)
         self.entries = [
             "experiments/6ce2f6b0/a33e8e5b/otelcol_exporter_sent_spans",
-            "experiments/6ce2f6b0/a33e8e5b/otelcol_exporter_some_other_metric",
+            "experiments/6ce2f6b0/a31e8e5b/otelcol_exporter_some_other_metric",
             "experiments/6ce2f6b0/a35e8e5b/otelcol_exporter_sent_spans",
             "experiments/6ce2f6b0/f35e8e5b/otelcol_exporter_sent_spans",
         ]
