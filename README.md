@@ -41,9 +41,9 @@
 > 
 > You then probably need to set the environment variables 
 > 
-> ``` export HDF5_DIR=/opt/homebrew/opt/hdf5```
+> ```export HDF5_DIR=/opt/homebrew/opt/hdf5```
 >
->  ```export BLOSC_DIR=/opt/homebrew/opt/c-blosc```
+> ```export BLOSC_DIR=/opt/homebrew/opt/c-blosc```
 
 
 ##### Tests
