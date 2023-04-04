@@ -1,5 +1,6 @@
 coverage:
-	coverage run -m unittest discover -s oxn/tests/
+	python -W ignore -m coverage run -m unittest discover -s oxn/tests/
+
 build:
 	python -m build
 
