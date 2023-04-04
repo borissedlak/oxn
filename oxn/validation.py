@@ -91,8 +91,8 @@ class SemanticValidator:
         for k, v in labels.items():
             if not self._validate_label_name(k):
                 self.messages.append(f"Prometheus does not recognize label name {k}")
-            if not self._validate_label_value(v):
-                self.messages.append(f"Prometheus does not recognize label value {v}")
+            if not self._validate_label_value(k, v):
+                self.messages.append(f"Prometheus does not recognize label value {v} for label {k}")
 
     def validate_metric_response_description(self, response: dict) -> None:
         """Validate a single metric response variable description"""
