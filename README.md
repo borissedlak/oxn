@@ -60,7 +60,7 @@
 ```coverage report```
 
 
-##### Run example observability experiments
+##### Run an example observability experiment
 
 ```
 oxn --help
