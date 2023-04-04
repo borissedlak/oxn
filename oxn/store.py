@@ -65,7 +65,10 @@ class Trie:
 
     def query(self, item):
         """
-        Query the trie for an item
+        Query the trie for an item.
+
+        Querying the trie with "" will return all items in the trie in LIFO order.
+
         """
         self.keys = []
         node = self.root
