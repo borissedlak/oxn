@@ -48,6 +48,129 @@ class EmptyTreatment(Treatment):
         return "empty"
 
 
+class CorruptPacketTreatment(Treatment):
+    def action(self):
+        return "corrupt"
+
+    def preconditions(self) -> bool:
+        """Check if the service has tc installed"""
+        service = self.config.get("service_name")
+        command = [
+            "tc",
+            "-Version"
+        ]
+        client = docker.from_env()
+        try:
+            container = client.containers.get(container_id=service)
+            status_code, _ = container.exec_run(cmd=command)
+            logger.info(
+                f"Probed container {service} for tc with result {status_code}"
+            )
+            if not status_code == 0:
+                self.messages.append(
+                    f"Container {service} does not have tc installed which is required for {self}. Please install "
+                    "package iptables2 in the container"
+                )
+            return status_code == 0
+
+        except ContainerNotFound:
+            logger.error(f"Can't find container {service}")
+            return False
+        except DockerAPIError as e:
+            logger.error(f"Docker API returned an error: {e.explanation}")
+            return False
+
+    def inject(self) -> None:
+        service = self.config.get("service_name")
+        interface = self.config.get("interface")
+        duration = self.config.get("duration_seconds")
+        percentage = self.config.get("corrupt_percentage")
+        # optional param with default arg
+        correlation = self.config.get("corrupt_correlation") or "0%"
+
+        command = [
+            "tc",
+            "qdic",
+            "add",
+            "dev",
+            interface,
+            "root",
+            "netem",
+            "corrupt",
+            percentage,
+            correlation,
+        ]
+
+        client = docker.from_env()
+        try:
+            container = client.containers.get(container_id=service)
+            container.exec_run(cmd=command)
+            logger.info(
+                f"Injected packet corruption into container {service}. Waiting for {duration}s."
+            )
+            time.sleep(duration)
+        except ContainerNotFound:
+            logger.error(f"Can't find container {service}")
+        except DockerAPIError as e:
+            logger.error(f"Docker API returned an error: {e.explanation}")
+
+    def clean(self) -> None:
+        interface = self.config.get("interface") or "eth0"
+        service = self.config.get("service_name")
+        command = ["tc", "qdisc", "del", "dev", interface, "root", "netem"]
+        client = docker.from_env()
+        try:
+            container = client.containers.get(container_id=service)
+            container.exec_run(cmd=command)
+            logger.info(f"Cleaned delay treatment from container {service}")
+        except (ContainerNotFound, DockerAPIError) as e:
+            logger.error(
+                f"Cannot clean delay treatment from container {service}: {e.explanation}"
+            )
+            logger.error(f"Container state for {service} might be polluted now")
+
+    def params(self) -> dict:
+        return {
+            "service_name": str,
+            "interface": str,
+            "duration": str,
+            "corrupt_percentage": str,
+            "corrupt_correlation": Optional[str],
+        }
+
+    def _validate_params(self) -> bool:
+        bools = []
+        for key, value in self.params().items():
+            # required params
+            if (
+                    key in {"service_name", "duration", "interface", "corrupt_percentage"}
+                    and key not in self.config
+            ):
+                self.messages.append(f"Parameter {key} has to be supplied")
+                bools.append(False)
+            # supplied params have correct type
+            if key in self.config and not isinstance(self.config[key], value):
+                self.messages.append(f"Parameter {key} has to be of type {str(value)}")
+        for key, value in self.config.items():
+            if key == "duration":
+                if not validate_time_string(value):
+                    self.messages.append(
+                        f"Parameter {key} has to match {time_string_format_regex}"
+                    )
+                    bools.append(False)
+            if key in {"corrupt_percentage", "corrupt_correlation"}:
+                format_regex = r"^[1-9][0-9]?\%$|^100\%$"
+                if not bool(re.match(format_regex, value)):
+                    self.messages.append(f"Parameter {key} has to match {format_regex}")
+                    bools.append(False)
+        return all(bools)
+
+    def _transform_params(self) -> None:
+        relative_time_string = self.config.get("duration")
+        relative_time_seconds = time_string_to_seconds(relative_time_string)
+        self.config["duration_seconds"] = relative_time_seconds
+
+
 class TailSamplingTreatment(Treatment):
     """
     Add a tracing tail sampling policy to the OpenTelemetry collector
@@ -256,8 +379,8 @@ class NetworkDelayTreatment(Treatment):
         for key, val in self.params().items():
             # required params
             if (
-                key in {"service_name", "duration", "interface", "delay_time"}
-                and key not in self.config
+                    key in {"service_name", "duration", "interface", "delay_time"}
+                    and key not in self.config
             ):
                 self.messages.append(
                     f"Parameter {key} has to be supplied for {self.treatment_type}"
@@ -729,7 +852,7 @@ class StressTreatment(Treatment):
     def _build_command(self):
         stressor_list = self._build_stressor_list()
         return (
-            ["stress-ng"] + stressor_list + ["--timeout", self.config.get("duration")]
+                ["stress-ng"] + stressor_list + ["--timeout", self.config.get("duration")]
         )
 
     def inject(self) -> None:
@@ -763,8 +886,8 @@ class StressTreatment(Treatment):
     def _validate_params(self) -> bool:
         for key, val in self.params().items():
             if (
-                key in {"service_name", "duration", "stressors"}
-                and key not in self.config
+                    key in {"service_name", "duration", "stressors"}
+                    and key not in self.config
             ):
                 self.messages.append(
                     f"Parameter {key} has to be supplied for {self.treatment_type}"
