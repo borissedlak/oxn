@@ -202,8 +202,8 @@ class DockerComposeOrchestrator:
                     container = container.reload()
                 logger.debug(f"Container {container_name} is running.")
                 all_ready.append(True)
-            except NotFound:
-                continue
+            except NotFound as e:
+                raise OrchestrationException(message="Error while building the sue", explanation=e)
         # TODO: container "running" state does not mean the service is responsive yet
         return all(all_ready)
 
