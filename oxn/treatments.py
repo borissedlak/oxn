@@ -635,7 +635,7 @@ class KillTreatment(Treatment):
         client = docker.from_env()
         try:
             container = client.containers.get(container_id=service)
-            container_state = container.status["Status"]
+            container_state = container.state
             logger.debug(
                 f"Probed container {service} for state running with result {container_state}"
             )
