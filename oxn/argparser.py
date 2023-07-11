@@ -1,6 +1,8 @@
 import argparse
 import os
 
+from .utils import time_string_to_seconds
+
 
 def validate_file(file):
     if not os.path.exists(file):
@@ -70,6 +72,7 @@ parser.add_argument(
     "--timeout",
     default="1m",
     help="Timeout after which we stop trying to build the SUE. Default is 1m",
+    type=time_string_to_seconds
 )
 
 
