@@ -1,4 +1,11 @@
-"""Script to facilitate experiments for the thesis"""
+"""Evaluate experiment reports created by oxn"""
+import itertools
+# TODO: figure out a way to use multiple feature columns
+# TODO: handle multiple interactions
+# TODO: refactor trace/metric models common functionality into base class
+# TODO: add descriptive methods for stats and so on
+# TODO: implement learning rate plots for models based on sample size
+
 # required so that gevent does not complain
 from gevent import monkey
 
@@ -9,8 +16,9 @@ import os.path
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.metrics import confusion_matrix, precision_recall_curve, classification_report
+from sklearn.metrics import confusion_matrix, precision_recall_curve, classification_report, f1_score
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import learning_curve
 from imblearn.over_sampling import SMOTE
 
 import numpy as np
@@ -21,47 +29,6 @@ from matplotlib import pyplot as plt
 from oxn.store import get_dataframe
 
 import argparse
-
-
-def build_learning_curve(experiment_df, feature_column, label_column):
-    from sklearn.model_selection import learning_curve
-    x = experiment_df[feature_column].values.reshape(-1, 1)
-    y = experiment_df[label_column]
-
-    le = LabelEncoder()
-    y = le.fit_transform(y)
-
-    # Create CV training and test scores for various training set sizes
-    train_sizes, train_scores, test_scores = learning_curve(LogisticRegression(),
-                                                            x,
-                                                            y,
-                                                            cv=10,
-                                                            scoring='f1',
-                                                            n_jobs=-1,
-                                                            train_sizes=np.linspace(0.01, 1.0, 10))
-
-    # Calculate mean and standard deviation for training set scores
-    train_mean = np.mean(train_scores, axis=1)
-    train_std = np.std(train_scores, axis=1)
-
-    # Calculate mean and standard deviation for test set scores
-    test_mean = np.mean(test_scores, axis=1)
-    test_std = np.std(test_scores, axis=1)
-
-    # Plot mean accuracy scores for training and test sets
-    plt.figure(figsize=(5, 5))
-    plt.plot(train_sizes, train_mean, label="Training score")
-    plt.plot(train_sizes, test_mean, label="Cross-validation score")
-
-    # Plot accurancy bands for training and test sets
-    plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, color="#DDDDDD")
-    plt.fill_between(train_sizes, test_mean - test_std, test_mean + test_std, color="#DDDDDD")
-
-    # Create plot
-    plt.title("Learning Curve")
-    plt.xlabel("Training Set Size"), plt.ylabel("Accuracy Score"), plt.legend(loc="best")
-    plt.tight_layout()
-    plt.show(block=False)
 
 
 class TraceModel:
@@ -82,7 +49,6 @@ class TraceModel:
     def build_lr(self, split=0.3, folds=10):
         """Build a logistic regression classifier"""
         y = self.experiment_data[self.label_column]
-        # TODO: figure out a way to use multiple feature columns
         operation = pd.get_dummies(self.experiment_data["operation"], prefix="operation")
         x = pd.concat([self.experiment_data[self.feature_columns], operation], axis=1)
         le = LabelEncoder()
@@ -105,11 +71,8 @@ class TraceModel:
     def build_gb(self, split=0.3):
         """Build a gradient boosting classifier"""
         y = self.experiment_data[self.label_column]
-        categorical_features = [
-            pd.get_dummies(self.experiment_data[column], prefix=column) for column in self.categorical_columns
-        ]
-        categorical_features = pd.concat(categorical_features, axis=1)
-        x = pd.concat([self.experiment_data[self.feature_columns], categorical_features], axis=1)
+        operation = pd.get_dummies(self.experiment_data["operation"], prefix="operation")
+        x = pd.concat([self.experiment_data[self.feature_columns], operation], axis=1)
         le = LabelEncoder()
         y = le.fit_transform(y)
         smote = SMOTE(random_state=0)
@@ -126,6 +89,22 @@ class TraceModel:
         self.y_test = y_test
         self.classifier = classifier
         self.predictions = self.classifier.predict(self.x_test)
+
+    def cross_predict(self, other_response, other_label, split=0.3):
+        """Try to predict fault labels from another response"""
+        y = other_response[other_label]
+        operation = pd.get_dummies(other_response["operation"], prefix="operation")
+        x = pd.concat([other_response[self.feature_columns], operation], axis=1)
+        le = LabelEncoder()
+        y = le.fit_transform(y)
+        smote = SMOTE(random_state=0)
+        scaler = StandardScaler()
+        x_resampled, y_resampled = smote.fit_resample(x, y)
+        x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
+        x_train = scaler.fit_transform(x_train)
+        x_test = scaler.transform(x_test)
+        cross_predictions = self.classifier.predict(x_test)
+        return f1_score(y_test, cross_predictions, average="macro")
 
     def scores(self):
         return classification_report(self.y_test, self.predictions)
@@ -148,6 +127,58 @@ class TraceModel:
         plt.title('Precision-Recall Curve')
         plt.legend(loc="lower left")
         plt.show(block=False)
+
+    def plot_lr_learning_curve(self, folds=10):
+        y = self.experiment_data[self.label_column]
+        categorical_features = [
+            pd.get_dummies(self.experiment_data[column], prefix=column) for column in self.categorical_columns
+        ]
+        categorical_features = pd.concat(categorical_features, axis=1)
+        x = pd.concat([self.experiment_data[self.feature_columns], categorical_features], axis=1)
+        le = LabelEncoder()
+        y = le.fit_transform(y)
+        smote = SMOTE(random_state=0)
+        scaler = StandardScaler()
+        x_resampled, y_resampled = smote.fit_resample(x, y)
+        x_resampled = scaler.fit_transform(x_resampled)
+        train_sizes, train_scores, test_scores = learning_curve(
+            LogisticRegression(),
+            x_resampled,
+            y_resampled,
+            cv=folds,
+            scoring='f1',
+            n_jobs=-1,
+            train_sizes=np.linspace(0.01, 1.0, 10)
+        )
+
+        # Calculate mean and standard deviation for training set scores
+        train_mean = np.mean(train_scores, axis=1)
+        # Calculate mean and standard deviation for test set scores
+        test_mean = np.mean(test_scores, axis=1)
+        # Plot mean accuracy scores for training and test sets
+        plt.figure(figsize=(5, 5))
+        plt.plot(train_sizes, train_mean, label="Training score")
+        plt.plot(train_sizes, test_mean, label="Cross-validation score")
+
+        # Create plot
+        plt.title("Learning Curve")
+        plt.xlabel("Training Set Size"), plt.ylabel("Accuracy Score"), plt.legend(loc="best")
+        plt.tight_layout()
+        plt.show(block=False)
+
+    def visibility_score(self):
+        """The fault visibility score is defined as the macro f1 score for the classifier"""
+        return f1_score(self.y_test, self.predictions, average="macro")
+
+    def print_scores(self):
+        print(self)
+        print(self.scores())
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(clf={self.classifier.__class__.__name__})"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class MetricModel:
@@ -206,8 +237,80 @@ class MetricModel:
         self.classifier = classifier
         self.predictions = self.classifier.predict(self.x_test)
 
+    def cross_predict(self, other_response, other_label, split=0.3):
+        """Try to predict fault labels from another response"""
+        x = pd.concat([other_response[self.feature_columns]], axis=1)
+        # this only works if the response variable is the same for the cross prediction
+        y = other_response[other_label]
+        le = LabelEncoder()
+        y = le.fit_transform(y)
+        smote = SMOTE(random_state=0)
+        scaler = StandardScaler()
+        x_resampled, y_resampled = smote.fit_resample(x, y)
+        x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
+        x_train = scaler.fit_transform(x_train)
+        x_test = scaler.transform(x_test)
+        cross_predictions = self.classifier.predict(x_test)
+        return f1_score(y_test, cross_predictions, average="macro")
+
+    def plot_lr_learning_curve(self, folds=10):
+        y = self.experiment_data[self.label_column]
+        x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
+        le = LabelEncoder()
+        y = le.fit_transform(y)
+        smote = SMOTE(random_state=0)
+        scaler = StandardScaler()
+        x_resampled, y_resampled = smote.fit_resample(x, y)
+        x_resampled = scaler.fit_transform(x_resampled)
+        train_sizes, train_scores, test_scores = learning_curve(
+            LogisticRegression(),
+            x_resampled,
+            y_resampled,
+            cv=folds,
+            scoring='f1',
+            n_jobs=-1,
+            train_sizes=np.linspace(0.01, 1.0, 10)
+        )
+
+        # Calculate mean and standard deviation for training set scores
+        train_mean = np.mean(train_scores, axis=1)
+        train_std = np.std(train_scores, axis=1)
+
+        # Calculate mean and standard deviation for test set scores
+        test_mean = np.mean(test_scores, axis=1)
+        test_std = np.std(test_scores, axis=1)
+
+        # Plot mean accuracy scores for training and test sets
+        plt.figure(figsize=(5, 5))
+        plt.plot(train_sizes, train_mean, label="Training score")
+        plt.plot(train_sizes, test_mean, label="Cross-validation score")
+
+        # Plot accuracy bands for training and test sets
+        plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, color="#DDDDDD")
+        plt.fill_between(train_sizes, test_mean - test_std, test_mean + test_std, color="#DDDDDD")
+
+        # Create plot
+        plt.title("Learning Curve")
+        plt.xlabel("Training Set Size"), plt.ylabel("Accuracy Score"), plt.legend(loc="best")
+        plt.tight_layout()
+        plt.show(block=False)
+
     def scores(self):
         return classification_report(self.y_test, self.predictions)
+
+    def visibility_score(self):
+        """The fault visibility score is defined as the macro f1 score for the classifier"""
+        return f1_score(self.y_test, self.predictions, average="macro")
+
+    def print_scores(self):
+        print(self)
+        print(self.scores())
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(clf={self.classifier.__class__.__name__})"
+
+    def __repr__(self):
+        return self.__str__()
 
     def plot_confusion_matrix(self):
         cm = confusion_matrix(self.y_test, self.predictions)
@@ -490,9 +593,6 @@ class Report:
         return cls(experiment_name=report_path, created=creation_time, data=report_data)
 
 
-# TODO: implement cross-predictions for multiple reports
-
-
 def valid_split_range(n):
     n = float(n)
     if n < 0 or n > 1:
@@ -523,7 +623,7 @@ parser.add_argument(
     "--plot",
     help="Specify which plots to output",
     action="append",
-    choices=["cm", "curve", "data"],
+    choices=["cm", "prcurve", "data", "lcurve"],
     default=[],
 )
 parser.add_argument(
@@ -532,11 +632,22 @@ parser.add_argument(
     type=valid_split_range,
     default=0.3
 )
+parser.add_argument(
+    "--cross",
+    help="Compute cross-predictions to evaluate fault ambiguity",
+    action="store_true",
+
+)
 
 if __name__ == "__main__":
     args = parser.parse_args()
     # build report objects for each report
     reports = [Report.from_file(report_path=report) for report in args.reports]
+    models = []
+
+    if args.cross and len(args.classifier) > 1:
+        parser.error(message="Cross-prediction is only allowed for a single classifier")
+
     for report in reports:
         for interaction in report.interactions:
             for plot in args.plot:
@@ -545,20 +656,37 @@ if __name__ == "__main__":
                     plt.show()
     for classifier in args.classifier:
         for report in reports:
-            # TODO: handle multiple interactions
             first_interaction = report.interactions[0]
-            model = None
+            model = first_interaction.get_model()
             if classifier == "GBT":
-                model = first_interaction.get_model()
                 model.build_gb(split=args.split)
-                print(model.scores())
             if classifier == "LR":
-                model = first_interaction.get_model()
                 model.build_lr(split=args.split)
-                print(model.scores())
+            print(f"{report}")
+            print(f"Visibility: {model.visibility_score()}")
+            models.append((report, model))
             for plot in args.plot:
                 if plot == "cm":
                     model.plot_confusion_matrix()
-                if plot == "curve":
+                if plot == "prcurve":
                     model.plot_precision_recall_curve()
+                if plot == "lcurve":
+                    model.plot_lr_learning_curve()
                 plt.show()
+    if args.cross:
+        pairs = list(itertools.combinations(models, 2))
+        for first_pair, second_pair in pairs:
+            first_report, first_model = first_pair
+            second_report, second_model = second_pair
+            first_cross_scores = first_model.cross_predict(
+                other_response=second_model.experiment_data,
+                other_label=second_model.label_column
+            )
+            second_cross_scores = second_model.cross_predict(
+                other_response=first_model.experiment_data,
+                other_label=first_model.label_column
+            )
+            print(f"Cross predicting {first_report} -> {second_report}")
+            print(f"Ambiguity: {first_cross_scores}")
+            print(f"Cross predicting {second_report} -> {first_report}")
+            print(f"Ambiguity: {second_cross_scores}")
