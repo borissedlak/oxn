@@ -4,7 +4,8 @@ import itertools
 # TODO: handle multiple interactions
 # TODO: refactor trace/metric models common functionality into base class
 # TODO: add descriptive methods for stats and so on
-# TODO: implement learning rate plots for models based on sample size
+# TODO: if sampling was active some categorical features mighht be missing, and this is a problem when one-hot-encoding the data
+
 
 # required so that gevent does not complain
 from gevent import monkey
@@ -644,6 +645,8 @@ if __name__ == "__main__":
     # build report objects for each report
     reports = [Report.from_file(report_path=report) for report in args.reports]
     models = []
+    visibility_data = []
+    ambiguity_data = []
 
     if args.cross and len(args.classifier) > 1:
         parser.error(message="Cross-prediction is only allowed for a single classifier")
@@ -662,8 +665,7 @@ if __name__ == "__main__":
                 model.build_gb(split=args.split)
             if classifier == "LR":
                 model.build_lr(split=args.split)
-            print(f"{report}")
-            print(f"Visibility: {model.visibility_score()}")
+            visibility_data.append([str(report), model.visibility_score()])
             models.append((report, model))
             for plot in args.plot:
                 if plot == "cm":
@@ -673,6 +675,8 @@ if __name__ == "__main__":
                 if plot == "lcurve":
                     model.plot_lr_learning_curve()
                 plt.show()
+        visibility_df = pd.DataFrame(visibility_data, columns=["report", "visibility"])
+        print(visibility_df)
     if args.cross:
         pairs = list(itertools.combinations(models, 2))
         for first_pair, second_pair in pairs:
@@ -686,7 +690,12 @@ if __name__ == "__main__":
                 other_response=first_model.experiment_data,
                 other_label=first_model.label_column
             )
-            print(f"Cross predicting {first_report} -> {second_report}")
-            print(f"Ambiguity: {first_cross_scores}")
-            print(f"Cross predicting {second_report} -> {first_report}")
-            print(f"Ambiguity: {second_cross_scores}")
+            ambiguity_data.append([str(first_report), str(second_report), first_cross_scores])
+            ambiguity_data.append([str(second_report), str(first_report), second_cross_scores])
+        ambiguity_df = pd.DataFrame(ambiguity_data, columns=["first_report", "second_report", "ambiguity"])
+        # perform some magic sorting
+        idx = ambiguity_df.first_report.astype(str).argsort()
+        ambiguity_df = ambiguity_df.iloc[idx]
+        print(ambiguity_df)
+
+
