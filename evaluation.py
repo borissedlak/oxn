@@ -1,7 +1,10 @@
 """Script to facilitate experiments for the thesis"""
+# required so that gevent does not complain
+from gevent import monkey
+
+monkey.patch_all()
 import datetime
 import os.path
-import sys
 
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -16,6 +19,8 @@ import yaml
 import seaborn as sns
 from matplotlib import pyplot as plt
 from oxn.store import get_dataframe
+
+import argparse
 
 
 def build_learning_curve(experiment_df, feature_column, label_column):
@@ -74,7 +79,7 @@ class TraceModel:
         self.classifier = None
         self.predictions = None
 
-    def build_lr(self, split=0.3, folds=100):
+    def build_lr(self, split=0.3, folds=10):
         """Build a logistic regression classifier"""
         y = self.experiment_data[self.label_column]
         # TODO: figure out a way to use multiple feature columns
@@ -137,7 +142,7 @@ class TraceModel:
     def plot_precision_recall_curve(self):
         precision, recall, _ = precision_recall_curve(self.y_test, self.predictions)
         plt.figure(figsize=(5, 5))
-        plt.plot(recall, precision, label='Precision-Recall curve')
+        plt.plot(recall, precision)
         plt.xlabel('Recall')
         plt.ylabel('Precision')
         plt.title('Precision-Recall Curve')
@@ -211,6 +216,16 @@ class MetricModel:
         plt.ylabel("Actual")
         plt.xlabel("Predicted")
         plt.title(f"Confusion Matrix [{self.classifier.__class__.__name__}]", size=15)
+        plt.show(block=False)
+
+    def plot_precision_recall_curve(self):
+        precision, recall, _ = precision_recall_curve(self.y_test, self.predictions)
+        plt.figure(figsize=(5, 5))
+        plt.plot(recall, precision)
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision-Recall Curve')
+        plt.legend(loc="lower left")
         plt.show(block=False)
 
 
@@ -301,7 +316,6 @@ class Interaction:
         )
         ax.axvline(x=pd.to_datetime(self.treatment_start), color="r", linewidth=1)
         ax.axvline(x=pd.to_datetime(self.treatment_end), color="r", linewidth=1)
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
         sns.despine(ax=ax)
         plt.show(block=False)
 
@@ -479,15 +493,72 @@ class Report:
 # TODO: implement cross-predictions for multiple reports
 
 
-if __name__ == "__main__":
-    report_name = sys.argv[1]
-    report = Report.from_file(report_path=report_name)
+def valid_split_range(n):
+    n = float(n)
+    if n < 0 or n > 1:
+        raise argparse.ArgumentTypeError("Split must be between 0 and 1")
+    return n
 
-    first_interaction = report.interactions[0]
-    print(first_interaction.response_data)
-    first_interaction.plot_interaction()
-    metric_model = first_interaction.get_model()
-    metric_model.build_gb()
-    metric_model.plot_confusion_matrix()
-    print(metric_model.scores())
-    plt.show()
+
+parser = argparse.ArgumentParser(
+    prog="evaluation",
+    description="Build fault prediction models and visualize experiment data from oxn"
+)
+
+parser.add_argument(
+    "reports",
+    help="Reports to evaluate",
+    nargs="+",
+)
+
+parser.add_argument(
+    "--classifier",
+    help="Specify which classifier to use",
+    action="append",
+    choices=["GBT", "LR"],
+    default=[],
+)
+
+parser.add_argument(
+    "--plot",
+    help="Specify which plots to output",
+    action="append",
+    choices=["cm", "curve", "data"],
+    default=[],
+)
+parser.add_argument(
+    "--split",
+    help="Specify the test data size. Must be between 0 and 1",
+    type=valid_split_range,
+    default=0.3
+)
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    # build report objects for each report
+    reports = [Report.from_file(report_path=report) for report in args.reports]
+    for report in reports:
+        for interaction in report.interactions:
+            for plot in args.plot:
+                if plot == "data":
+                    interaction.plot_interaction()
+                    plt.show()
+    for classifier in args.classifier:
+        for report in reports:
+            # TODO: handle multiple interactions
+            first_interaction = report.interactions[0]
+            model = None
+            if classifier == "GBT":
+                model = first_interaction.get_model()
+                model.build_gb(split=args.split)
+                print(model.scores())
+            if classifier == "LR":
+                model = first_interaction.get_model()
+                model.build_lr(split=args.split)
+                print(model.scores())
+            for plot in args.plot:
+                if plot == "cm":
+                    model.plot_confusion_matrix()
+                if plot == "curve":
+                    model.plot_precision_recall_curve()
+                plt.show()
