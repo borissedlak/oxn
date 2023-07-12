@@ -147,7 +147,71 @@ class TraceModel:
 
 class MetricModel:
     """A classifier to predict treatment labels from a metric response variable"""
-    pass
+
+    def __init__(self, experiment_data, feature_columns, label_column):
+        self.experiment_data = experiment_data
+        self.feature_columns = feature_columns
+        self.label_column = label_column
+        self.x_train = None
+        self.x_test = None
+        self.y_train = None
+        self.y_test = None
+        self.classifier = None
+        self.predictions = None
+
+    def build_lr(self, split=0.3, folds=100):
+        """Build a logistic regression classifier for a metric response variable"""
+        y = self.experiment_data[self.label_column]
+        x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
+        le = LabelEncoder()
+        y = le.fit_transform(y)
+        smote = SMOTE(random_state=0)
+        scaler = StandardScaler()
+        x_resampled, y_resampled = smote.fit_resample(x, y)
+        x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
+        x_train = scaler.fit_transform(x_train)
+        x_test = scaler.transform(x_test)
+        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", cv=folds, scoring="f1", n_jobs=-1)
+        classifier.fit(x_train, y_train)
+        self.x_train = x_train
+        self.x_test = x_test
+        self.y_train = y_train
+        self.y_test = y_test
+        self.classifier = classifier
+        self.predictions = self.classifier.predict(self.x_test)
+
+    def build_gb(self, split=0.3):
+        """Build a gradient boosting classifier for a metric repsonse variable"""
+        y = self.experiment_data[self.label_column]
+        x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
+        le = LabelEncoder()
+        y = le.fit_transform(y)
+        smote = SMOTE(random_state=0)
+        scaler = StandardScaler()
+        x_resampled, y_resampled = smote.fit_resample(x, y)
+        x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
+        x_train = scaler.fit_transform(x_train)
+        x_test = scaler.transform(x_test)
+        classifier = HistGradientBoostingClassifier()
+        classifier.fit(x_train, y_train)
+        self.x_train = x_train
+        self.x_test = x_test
+        self.y_train = y_train
+        self.y_test = y_test
+        self.classifier = classifier
+        self.predictions = self.classifier.predict(self.x_test)
+
+    def scores(self):
+        return classification_report(self.y_test, self.predictions)
+
+    def plot_confusion_matrix(self):
+        cm = confusion_matrix(self.y_test, self.predictions)
+        plt.figure(figsize=(5, 5))
+        sns.heatmap(cm, annot=True, fmt=".0f", linewidths=.5, square=True, cmap='Blues_r')
+        plt.ylabel("Actual")
+        plt.xlabel("Predicted")
+        plt.title(f"Confusion Matrix [{self.classifier.__class__.__name__}]", size=15)
+        plt.show(block=False)
 
 
 class Interaction:
@@ -180,9 +244,24 @@ class Interaction:
         )
         return model
 
+    def get_metric_name(self):
+        if not self.response_type == "MetricResponseVariable":
+            return ""
+        return self.response_data["__name__"].iloc[0]
+
+    def get_metric_model(self):
+        model = MetricModel(
+            experiment_data=self.get_data(),
+            feature_columns=[self.get_metric_name()],
+            label_column=self.treatment_name,
+        )
+        return model
+
     def get_model(self):
-        if self.treatment_type == "TraceResponseVariable":
+        if self.response_type == "TraceResponseVariable":
             return self.get_trace_model()
+        if self.response_type == "MetricResponseVariable":
+            return self.get_metric_model()
 
     def plot_trace_interaction(self, color_services=False):
         """Plot a treatment-response interaction for a trace response variable"""
@@ -208,8 +287,6 @@ class Interaction:
         """Plot a treatment-response interaction for a metric response variable"""
         fig, ax = plt.subplots(figsize=(5, 5))
         response_df = self.response_data
-        response_df.start_time = pd.to_datetime(response_df.start_time, unit="us")
-        response_df.end_time = pd.to_datetime(response_df.end_time, unit="us")
         metric_name = response_df["__name__"].iloc[0]
         sns.lineplot(ax=ax, x=response_df.index, y=response_df[metric_name])
         ax.set(title=f"{self.treatment_name} [{metric_name}]")
@@ -350,6 +427,7 @@ class Report:
 
     @property
     def accounting_data(self) -> pd.DataFrame:
+        """Return the accounting data from each run"""
         header = ["run_key", "service", "cpu_seconds", "number_of_cpus"]
         data = []
         for run in self.runs:
@@ -362,6 +440,7 @@ class Report:
 
     @property
     def loadgen_data(self) -> pd.DataFrame:
+        """Return the load generation data from each run"""
         header = ["run_key", "task_id", "url", "verb",
                   "requests", "failures", "sum_response_time", "min_response_time", "max_response_time",
                   "avg_response_time", "median_response_time",
@@ -403,4 +482,12 @@ class Report:
 if __name__ == "__main__":
     report_name = sys.argv[1]
     report = Report.from_file(report_path=report_name)
-    print(report.loadgen_data.head())
+
+    first_interaction = report.interactions[0]
+    print(first_interaction.response_data)
+    first_interaction.plot_interaction()
+    metric_model = first_interaction.get_model()
+    metric_model.build_gb()
+    metric_model.plot_confusion_matrix()
+    print(metric_model.scores())
+    plt.show()
