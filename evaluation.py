@@ -659,43 +659,24 @@ if __name__ == "__main__":
                     plt.show()
     for classifier in args.classifier:
         for report in reports:
-            first_interaction = report.interactions[0]
-            model = first_interaction.get_model()
-            if classifier == "GBT":
-                model.build_gb(split=args.split)
-            if classifier == "LR":
-                model.build_lr(split=args.split)
-            visibility_data.append([str(report), model.visibility_score()])
-            models.append((report, model))
-            for plot in args.plot:
-                if plot == "cm":
-                    model.plot_confusion_matrix()
-                if plot == "prcurve":
-                    model.plot_precision_recall_curve()
-                if plot == "lcurve":
-                    model.plot_lr_learning_curve()
-                plt.show()
-        visibility_df = pd.DataFrame(visibility_data, columns=["report", "visibility"])
+            for interaction in report.interactions:
+                model = interaction.get_model()
+                if classifier == "GBT":
+                    model.build_gb(split=args.split)
+                if classifier == "LR":
+                    model.build_lr(split=args.split)
+                visibility_data.append([str(report), interaction.treatment_type, interaction.response_type, model.visibility_score()])
+                models.append((report, model))
+                for plot in args.plot:
+                    if plot == "cm":
+                        model.plot_confusion_matrix()
+                    if plot == "prcurve":
+                        model.plot_precision_recall_curve()
+                    if plot == "lcurve":
+                        model.plot_lr_learning_curve()
+                    plt.show()
+        visibility_df = pd.DataFrame(visibility_data, columns=["report", "treatment", "response", "visibility"])
         print(visibility_df)
-    if args.cross:
-        pairs = list(itertools.combinations(models, 2))
-        for first_pair, second_pair in pairs:
-            first_report, first_model = first_pair
-            second_report, second_model = second_pair
-            first_cross_scores = first_model.cross_predict(
-                other_response=second_model.experiment_data,
-                other_label=second_model.label_column
-            )
-            second_cross_scores = second_model.cross_predict(
-                other_response=first_model.experiment_data,
-                other_label=first_model.label_column
-            )
-            ambiguity_data.append([str(first_report), str(second_report), first_cross_scores])
-            ambiguity_data.append([str(second_report), str(first_report), second_cross_scores])
-        ambiguity_df = pd.DataFrame(ambiguity_data, columns=["first_report", "second_report", "ambiguity"])
-        # perform some magic sorting
-        idx = ambiguity_df.first_report.astype(str).argsort()
-        ambiguity_df = ambiguity_df.iloc[idx]
-        print(ambiguity_df)
+
 
 
