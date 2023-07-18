@@ -1,6 +1,7 @@
 """Treatment implementations"""
 import logging
 import os.path
+import tempfile
 import time
 import re
 from typing import Optional
@@ -46,6 +47,89 @@ class EmptyTreatment(Treatment):
     @property
     def action(self):
         return "empty"
+
+
+class ByteMonkeyTreatment(Treatment):
+    """Compile-time treatment that injects faults into a java service"""
+
+    def __init__(self, config, name):
+        super().__init__(config, name)
+        self.docker_client = docker.from_env()
+        self.original_entrypoint = ""
+        self.dockerfile_content = ""
+        self.temporary_jar_path = ""
+
+    @property
+    def action(self):
+        return "bytemonkey"
+
+    def preconditions(self) -> bool:
+        return True
+
+    def build_entrypoint(self) -> str:
+        """Build a modified entrypoint from provided bytemonkey configuration"""
+        mode = self.config.get("mode")
+        rate = self.config.get("rate")
+        template_string = f"-javaagent:byte-monkey.jar=mode:{mode},rate:{rate},"
+        return template_string
+
+    def read_dockerfile(self):
+        dockerfile_path = self.config.get("dockerfile")
+        with open(dockerfile_path, "r") as fp:
+            self.dockerfile_content = fp.read()
+
+    def download_jar(self, url="https://github.com/mrwilson/byte-monkey/releases/download/1.0.0/byte-monkey.jar"):
+        response = requests.get(url)
+        response.raise_for_status()
+        with tempfile.NamedTemporaryFile(suffix="jar", delete=False) as temporary_jar:
+            self.temporary_jar_path = temporary_jar.path
+            with open(self.temporary_jar_path, "wb") as fp:
+                fp.write(response.content)
+
+    def modify_dockerfile(self):
+        """Modify the dockerfile to add the bytemonkey dependency and modify the entrypoint"""
+        dockerfile_lines = self.dockerfile_content.splitlines()
+        for idx, line in enumerate(dockerfile_lines):
+            if line.startswith("ENTRYPOINT"):
+                self.original_entrypoint = ""
+                dockerfile_lines.insert(idx, f"COPY {self.temporary_jar_path} ./")
+                dockerfile_lines[idx] = f"{self.original_entrypoint} {self.build_entrypoint()}"
+        return "\n".join(dockerfile_lines)
+
+    def restore_entrypoint(self):
+        dockerfile_lines = self.dockerfile_content.splitlines()
+        for idx, line in enumerate(dockerfile_lines):
+            if line.startswith("ENTRYPOINT"):
+                dockerfile_lines[idx] = self.original_entrypoint
+        return "\n".join(dockerfile_lines)
+
+    def write_dockerfile(self, new_content: str):
+        dockerfile_path = self.config.get("dockerfile")
+        with open(dockerfile_path, "w") as fp:
+            fp.write(new_content)
+
+    def inject(self) -> None:
+        """Update the Dockerfile to modify the java entrypoint and re-build the image"""
+        self.read_dockerfile()
+        self.write_dockerfile(new_content=self.build_entrypoint())
+
+    def clean(self) -> None:
+        """Restore the original docker entrypoint"""
+        self.write_dockerfile(new_content=self.dockerfile_content)
+
+    def params(self) -> dict:
+        return {
+            "mode": str,
+            "rate": float,
+            "dockerfile": str,
+            "service_name": str,
+        }
+
+    def _validate_params(self) -> bool:
+        pass
+
+    def _transform_params(self) -> None:
+        pass
 
 
 class CorruptPacketTreatment(Treatment):
@@ -635,7 +719,7 @@ class KillTreatment(Treatment):
         client = docker.from_env()
         try:
             container = client.containers.get(container_id=service)
-            container_state = container.state
+            container_state = container.status
             logger.debug(
                 f"Probed container {service} for state running with result {container_state}"
             )
