@@ -132,7 +132,7 @@ class MetricResponseVariable(ResponseVariable):
             results = json_data["data"]["result"]
             check = results[0]
             columns = list(check["metric"].keys())
-            columns += ["timestamp", metric_column_name]
+            columns += ["timestamp", metric_column_name, self.name]
             rows = []
             for result in results:
                 for timestamp, value in result["values"]:
@@ -142,6 +142,7 @@ class MetricResponseVariable(ResponseVariable):
                             **result["metric"],
                             "timestamp": timestamp,
                             metric_column_name: parsed_value,
+                            self.name: parsed_value,
                         }
                     )
             dataframe = pd.DataFrame(columns=columns, data=rows)
