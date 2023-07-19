@@ -47,11 +47,10 @@ class TraceModel:
         self.classifier = None
         self.predictions = None
 
-    def build_lr(self, split=0.3, folds=10):
+    def build_lr(self, split=0.3, folds=5):
         """Build a logistic regression classifier"""
         y = self.experiment_data[self.label_column]
-        operation = pd.get_dummies(self.experiment_data["operation"], prefix="operation")
-        x = pd.concat([self.experiment_data[self.feature_columns], operation], axis=1)
+        x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
         le = LabelEncoder()
         y = le.fit_transform(y)
         smote = SMOTE(random_state=0)
@@ -72,8 +71,7 @@ class TraceModel:
     def build_gb(self, split=0.3):
         """Build a gradient boosting classifier"""
         y = self.experiment_data[self.label_column]
-        operation = pd.get_dummies(self.experiment_data["operation"], prefix="operation")
-        x = pd.concat([self.experiment_data[self.feature_columns], operation], axis=1)
+        x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
         le = LabelEncoder()
         y = le.fit_transform(y)
         smote = SMOTE(random_state=0)
@@ -110,7 +108,7 @@ class TraceModel:
     def scores(self):
         return classification_report(self.y_test, self.predictions)
 
-    def plot_confusion_matrix(self):
+    def plot_confusion_matrix(self, write=False):
         cm = confusion_matrix(self.y_test, self.predictions)
         plt.figure(figsize=(5, 5))
         sns.heatmap(cm, annot=True, fmt=".0f", linewidths=.5, square=True, cmap='Blues_r')
@@ -118,8 +116,10 @@ class TraceModel:
         plt.xlabel("Predicted")
         plt.title(f"Confusion Matrix [{self.classifier.__class__.__name__}]", size=15)
         plt.show(block=False)
+        if write:
+            plt.savefig(f"cm_{self.feature_columns}_{self.label_column}.png")
 
-    def plot_precision_recall_curve(self):
+    def plot_precision_recall_curve(self, write=False):
         precision, recall, _ = precision_recall_curve(self.y_test, self.predictions)
         plt.figure(figsize=(5, 5))
         plt.plot(recall, precision)
@@ -128,8 +128,10 @@ class TraceModel:
         plt.title('Precision-Recall Curve')
         plt.legend(loc="lower left")
         plt.show(block=False)
+        if write:
+            plt.savefig(f"prcurve_{self.feature_columns}_{self.label_column}.png")
 
-    def plot_lr_learning_curve(self, folds=10):
+    def plot_lr_learning_curve(self, folds=5, write=False):
         y = self.experiment_data[self.label_column]
         categorical_features = [
             pd.get_dummies(self.experiment_data[column], prefix=column) for column in self.categorical_columns
@@ -166,6 +168,8 @@ class TraceModel:
         plt.xlabel("Training Set Size"), plt.ylabel("Accuracy Score"), plt.legend(loc="best")
         plt.tight_layout()
         plt.show(block=False)
+        if write:
+            plt.savefig(f"lr_lcurve_{self.feature_columns}_{self.label_column}.png")
 
     def visibility_score(self):
         """The fault visibility score is defined as the macro f1 score for the classifier"""
@@ -196,10 +200,10 @@ class MetricModel:
         self.classifier = None
         self.predictions = None
 
-    def build_lr(self, split=0.3, folds=100):
+    def build_lr(self, split=0.3, folds=5):
         """Build a logistic regression classifier for a metric response variable"""
         y = self.experiment_data[self.label_column]
-        x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
+        x = self.experiment_data[self.feature_columns]
         le = LabelEncoder()
         y = le.fit_transform(y)
         smote = SMOTE(random_state=0)
@@ -254,7 +258,7 @@ class MetricModel:
         cross_predictions = self.classifier.predict(x_test)
         return f1_score(y_test, cross_predictions, average="macro")
 
-    def plot_lr_learning_curve(self, folds=10):
+    def plot_lr_learning_curve(self, folds=10, write=False):
         y = self.experiment_data[self.label_column]
         x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
         le = LabelEncoder()
@@ -295,6 +299,8 @@ class MetricModel:
         plt.xlabel("Training Set Size"), plt.ylabel("Accuracy Score"), plt.legend(loc="best")
         plt.tight_layout()
         plt.show(block=False)
+        if write:
+            plt.savefig(f"lr_lcurve_{self.feature_columns}_{self.label_column}.png")
 
     def scores(self):
         return classification_report(self.y_test, self.predictions)
@@ -313,7 +319,7 @@ class MetricModel:
     def __repr__(self):
         return self.__str__()
 
-    def plot_confusion_matrix(self):
+    def plot_confusion_matrix(self, write=False):
         cm = confusion_matrix(self.y_test, self.predictions)
         plt.figure(figsize=(5, 5))
         sns.heatmap(cm, annot=True, fmt=".0f", linewidths=.5, square=True, cmap='Blues_r')
@@ -321,8 +327,10 @@ class MetricModel:
         plt.xlabel("Predicted")
         plt.title(f"Confusion Matrix [{self.classifier.__class__.__name__}]", size=15)
         plt.show(block=False)
+        if write:
+            plt.savefig(f"cm_{self.feature_columns}_{self.label_column}.png")
 
-    def plot_precision_recall_curve(self):
+    def plot_precision_recall_curve(self, write=False):
         precision, recall, _ = precision_recall_curve(self.y_test, self.predictions)
         plt.figure(figsize=(5, 5))
         plt.plot(recall, precision)
@@ -331,10 +339,13 @@ class MetricModel:
         plt.title('Precision-Recall Curve')
         plt.legend(loc="lower left")
         plt.show(block=False)
+        if write:
+            plt.savefig(f"prcurve_{self.feature_columns}_{self.label_column}.png")
 
 
 class Interaction:
-    def __init__(self, data):
+    def __init__(self, id, data):
+        self.id = id
         self.treatment_name = data['treatment_name']
         self.treatment_start = data['treatment_start']
         self.treatment_end = data['treatment_end']
@@ -366,7 +377,8 @@ class Interaction:
     def get_metric_name(self):
         if not self.response_type == "MetricResponseVariable":
             return ""
-        return self.response_data["__name__"].iloc[0]
+        print()
+        return self.response_name
 
     def get_metric_model(self):
         model = MetricModel(
@@ -382,7 +394,7 @@ class Interaction:
         if self.response_type == "MetricResponseVariable":
             return self.get_metric_model()
 
-    def plot_trace_interaction(self, color_services=False):
+    def plot_trace_interaction(self, color_services=False, write=False):
         """Plot a treatment-response interaction for a trace response variable"""
         fig, ax = plt.subplots(figsize=(5, 5))
         response_df = self.response_data
@@ -401,12 +413,14 @@ class Interaction:
         ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
         sns.despine(ax=ax)
         plt.show(block=False)
+        if write:
+            plt.savefig(f"{self.treatment_name}_{self.response_name}.png")
 
-    def plot_metric_interaction(self):
+    def plot_metric_interaction(self, write=False):
         """Plot a treatment-response interaction for a metric response variable"""
         fig, ax = plt.subplots(figsize=(5, 5))
         response_df = self.response_data
-        metric_name = response_df["__name__"].iloc[0]
+        metric_name = self.get_metric_name()
         sns.lineplot(ax=ax, x=response_df.index, y=response_df[metric_name])
         ax.set(title=f"{self.treatment_name} [{metric_name}]")
         ax.set(ylabel=f"{metric_name}")
@@ -422,13 +436,15 @@ class Interaction:
         ax.axvline(x=pd.to_datetime(self.treatment_end), color="r", linewidth=1)
         sns.despine(ax=ax)
         plt.show(block=False)
+        if write:
+            plt.savefig(f"{self.treatment_name}_{self.response_name}.png")
 
-    def plot_interaction(self, color_services=False):
+    def plot_interaction(self, color_services=False, write=False):
         """Plot a response-treatment interaction depending on the type of response variable observed"""
         if self.response_type == "TraceResponseVariable":
-            self.plot_trace_interaction(color_services=color_services)
+            self.plot_trace_interaction(color_services=color_services, write=write)
         if self.response_type == "MetricResponseVariable":
-            self.plot_metric_interaction()
+            self.plot_metric_interaction(write=write)
 
     def trace_durations(self):
         """
@@ -457,7 +473,7 @@ class Interaction:
         durations = durations.set_index(durations.start_time)
         return durations
 
-    def plot_traces(self):
+    def plot_traces(self, write=False):
         """Aggregate the span data to a trace dataframe and plot it"""
         if not self.response_type == "TraceResponseVariable":
             return
@@ -468,15 +484,14 @@ class Interaction:
         ax.set(xlabel="Trace start timestamp")
         ax.set(ylabel="Duration [us]")
         ax.set(title=f"{self.treatment_name} [traces]")
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
         sns.despine(ax=ax)
+        plt.xticks(rotation=90)
         plt.show(block=False)
+        if write:
+            plt.savefig(f"{self.treatment_name}_{self.response_name}.png")
 
     def get_treatment_label(self):
-        labels = self.response_data[self.treatment_name].unique()
-        for label in labels:
-            if label.startswith(self.treatment_type):
-                return label
+        return self.treatment_name
 
     def __str__(self):
         return f"Interaction(treatment={self.treatment_type}, response={self.response_type})"
@@ -510,7 +525,8 @@ class AccountingDetail:
 class Run:
     def __init__(self, run_key, run_data):
         self.id = run_key
-        self.interactions = [Interaction(interaction) for interaction in run_data["interactions"].values()]
+        self.interactions = [Interaction(id=interaction_id, data=interaction) for interaction_id, interaction in
+                             run_data["interactions"].items()]
         self.loadgen_start_time = run_data["loadgen"].get('loadgen_start_time', '')
         self.loadgen_end_time = run_data["loadgen"].get('loadgen_end_time', '')
         self.loadgen_total_requests = run_data["loadgen"].get('loadgen_total_requests', 0)
@@ -624,7 +640,7 @@ parser.add_argument(
     "--plot",
     help="Specify which plots to output",
     action="append",
-    choices=["cm", "prcurve", "data", "lcurve"],
+    choices=["cm", "prcurve", "data", "lcurve", "traces"],
     default=[],
 )
 parser.add_argument(
@@ -634,10 +650,19 @@ parser.add_argument(
     default=0.3
 )
 parser.add_argument(
+    "--fold",
+    help="The number of cross-validation folds to use for the classifier",
+    default=5,
+)
+parser.add_argument(
+    "--write-plots",
+    help="Write the plots to disk",
+    action="store_true"
+)
+parser.add_argument(
     "--cross",
     help="Compute cross-predictions to evaluate fault ambiguity",
     action="store_true",
-
 )
 
 if __name__ == "__main__":
@@ -655,28 +680,45 @@ if __name__ == "__main__":
         for interaction in report.interactions:
             for plot in args.plot:
                 if plot == "data":
-                    interaction.plot_interaction()
+                    interaction.plot_interaction(write=args.write_plots)
+                    plt.show()
+                if plot == "traces":
+                    interaction.plot_traces(write=args.write_plots)
                     plt.show()
     for classifier in args.classifier:
         for report in reports:
             for interaction in report.interactions:
                 model = interaction.get_model()
+                dataframe = interaction.get_data()
                 if classifier == "GBT":
                     model.build_gb(split=args.split)
                 if classifier == "LR":
                     model.build_lr(split=args.split)
-                visibility_data.append([str(report), interaction.treatment_type, interaction.response_type, model.visibility_score()])
+                visibility_data.append([
+                    str(report),
+                    interaction.treatment_name,
+                    interaction.treatment_type,
+                    interaction.response_name,
+                    interaction.response_type,
+                    classifier,
+                    model.visibility_score()])
                 models.append((report, model))
                 for plot in args.plot:
                     if plot == "cm":
-                        model.plot_confusion_matrix()
+                        model.plot_confusion_matrix(write=args.write_plots)
                     if plot == "prcurve":
-                        model.plot_precision_recall_curve()
+                        model.plot_precision_recall_curve(write=args.write_plots)
                     if plot == "lcurve":
-                        model.plot_lr_learning_curve()
+                        model.plot_lr_learning_curve(write=args.write_plots)
                     plt.show()
-        visibility_df = pd.DataFrame(visibility_data, columns=["report", "treatment", "response", "visibility"])
+    if visibility_data:
+        visibility_df = pd.DataFrame(visibility_data, columns=[
+            "report",
+            "treatment_name",
+            "treatment_type",
+            "response_name",
+            "response_type",
+            "classifier",
+            "visibility"
+        ])
         print(visibility_df)
-
-
-
