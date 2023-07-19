@@ -240,5 +240,5 @@ class ExperimentRunner:
                     treatment_end=treatment.end,
                     treatment_start=treatment.start,
                     label_column=treatment.name,
-                    label=str(treatment),
+                    label=treatment.name,
                 )
