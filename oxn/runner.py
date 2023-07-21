@@ -128,19 +128,7 @@ class ExperimentRunner:
 
     def _build_treatments(self) -> None:
         """Build a representation of treatments defined in config"""
-        try:
-            treatment_section = self.config["experiment"]["treatments"]
-        except KeyError:
-            # no treatment section specified
-            self.treatments["empty"] = self._build_treatment(
-                action="empty", params={}, name="empty"
-            )
-            return
-        if not treatment_section:
-            self.treatments["empty"] = self._build_treatment(
-                action="empty", params={}, name="empty"
-            )
-            return
+        treatment_section = self.config["experiment"]["treatments"]
         if self.random_treatment_order:
             random.shuffle(treatment_section)
         for treatment in treatment_section:
