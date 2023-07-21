@@ -4,7 +4,6 @@ import itertools
 # TODO: handle multiple interactions
 # TODO: refactor trace/metric models common functionality into base class
 # TODO: add descriptive methods for stats and so on
-# TODO: if sampling was active some categorical features mighht be missing, and this is a problem when one-hot-encoding the data
 
 
 # required so that gevent does not complain
@@ -17,7 +16,7 @@ import os.path
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.metrics import confusion_matrix, precision_recall_curve, classification_report, f1_score
+from sklearn.metrics import confusion_matrix, precision_recall_curve, classification_report, f1_score, accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import learning_curve
 from imblearn.over_sampling import SMOTE
@@ -35,11 +34,12 @@ import argparse
 class TraceModel:
     """A classifier to predict treatment labels from a trace response variable"""
 
-    def __init__(self, experiment_data, feature_columns, categorical_columns, label_column):
+    def __init__(self, experiment_data, feature_columns, categorical_columns, label_column, score="f1"):
         self.experiment_data = experiment_data
         self.feature_columns = feature_columns
         self.categorical_columns = categorical_columns
         self.label_column = label_column
+        self.score = score
         self.x_train = None
         self.x_test = None
         self.y_train = None
@@ -47,7 +47,7 @@ class TraceModel:
         self.classifier = None
         self.predictions = None
 
-    def build_lr(self, split=0.3, folds=5):
+    def build_lr(self, split=0.3, folds=2):
         """Build a logistic regression classifier"""
         y = self.experiment_data[self.label_column]
         x = pd.concat([self.experiment_data[self.feature_columns]], axis=1)
@@ -59,7 +59,7 @@ class TraceModel:
         x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
         x_train = scaler.fit_transform(x_train)
         x_test = scaler.transform(x_test)
-        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", cv=folds, scoring="f1", n_jobs=-1)
+        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", n_jobs=-1, cv=folds, scoring=self.score)
         classifier.fit(x_train, y_train)
         self.x_train = x_train
         self.x_test = x_test
@@ -80,7 +80,7 @@ class TraceModel:
         x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
         x_train = scaler.fit_transform(x_train)
         x_test = scaler.transform(x_test)
-        classifier = HistGradientBoostingClassifier()
+        classifier = HistGradientBoostingClassifier(learning_rate=0.01, l2_regularization=0.1, max_depth=2)
         classifier.fit(x_train, y_train)
         self.x_train = x_train
         self.x_test = x_test
@@ -149,7 +149,7 @@ class TraceModel:
             x_resampled,
             y_resampled,
             cv=folds,
-            scoring='f1',
+            scoring=self.score,
             n_jobs=-1,
             train_sizes=np.linspace(0.01, 1.0, 10)
         )
@@ -173,7 +173,10 @@ class TraceModel:
 
     def visibility_score(self):
         """The fault visibility score is defined as the macro f1 score for the classifier"""
-        return f1_score(self.y_test, self.predictions, average="macro")
+        if self.score == "f1":
+            return f1_score(self.y_test, self.predictions)
+        if self.score == "accuracy":
+            return accuracy_score(self.y_test, self.predictions)
 
     def print_scores(self):
         print(self)
@@ -189,7 +192,7 @@ class TraceModel:
 class MetricModel:
     """A classifier to predict treatment labels from a metric response variable"""
 
-    def __init__(self, experiment_data, feature_columns, label_column):
+    def __init__(self, experiment_data, feature_columns, label_column, score="f1"):
         self.experiment_data = experiment_data
         self.feature_columns = feature_columns
         self.label_column = label_column
@@ -199,6 +202,7 @@ class MetricModel:
         self.y_test = None
         self.classifier = None
         self.predictions = None
+        self.score = score
 
     def build_lr(self, split=0.3, folds=5):
         """Build a logistic regression classifier for a metric response variable"""
@@ -212,7 +216,7 @@ class MetricModel:
         x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
         x_train = scaler.fit_transform(x_train)
         x_test = scaler.transform(x_test)
-        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", cv=folds, scoring="f1", n_jobs=-1)
+        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", cv=folds, scoring=self.score, n_jobs=-1)
         classifier.fit(x_train, y_train)
         self.x_train = x_train
         self.x_test = x_test
@@ -307,7 +311,10 @@ class MetricModel:
 
     def visibility_score(self):
         """The fault visibility score is defined as the macro f1 score for the classifier"""
-        return f1_score(self.y_test, self.predictions, average="macro")
+        if self.score == "f1":
+            return f1_score(self.y_test, self.predictions, average="macro")
+        if self.score == "accuracy":
+            return accuracy_score(self.y_test, self.predictions)
 
     def print_scores(self):
         print(self)
@@ -364,35 +371,39 @@ class Interaction:
     def get_data(self):
         return get_dataframe(key=self.store_key)
 
-    def get_trace_model(self):
+    def get_trace_model(self, score="f1", use_traces=True):
         """Build a logistic regression for predicting treatment labels from response data"""
+        experiment_data = self.get_data()
+        if use_traces:
+            experiment_data = self.trace_durations()
         model = TraceModel(
-            experiment_data=self.get_data(),
+            experiment_data=experiment_data,
             feature_columns=["duration"],
             categorical_columns=["operation"],
-            label_column=self.treatment_name
+            label_column=self.treatment_name,
+            score=score
         )
         return model
 
     def get_metric_name(self):
         if not self.response_type == "MetricResponseVariable":
             return ""
-        print()
         return self.response_name
 
-    def get_metric_model(self):
+    def get_metric_model(self, score="f1"):
         model = MetricModel(
             experiment_data=self.get_data(),
             feature_columns=[self.get_metric_name()],
             label_column=self.treatment_name,
+            score=score,
         )
         return model
 
-    def get_model(self):
+    def get_model(self, score="f1", use_traces=False):
         if self.response_type == "TraceResponseVariable":
-            return self.get_trace_model()
+            return self.get_trace_model(score=score, use_traces=use_traces)
         if self.response_type == "MetricResponseVariable":
-            return self.get_metric_model()
+            return self.get_metric_model(score=score)
 
     def plot_trace_interaction(self, color_services=False, write=False):
         """Plot a treatment-response interaction for a trace response variable"""
@@ -410,8 +421,8 @@ class Interaction:
         ax.set(title=f"{self.treatment_name} [spans]")
         ax.axvline(x=pd.to_datetime(self.treatment_start), color="r", linewidth=1)
         ax.axvline(x=pd.to_datetime(self.treatment_end), color="r", linewidth=1)
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
         sns.despine(ax=ax)
+        plt.xticks(rotation=90)
         plt.show(block=False)
         if write:
             plt.savefig(f"{self.treatment_name}_{self.response_name}.png")
@@ -457,7 +468,7 @@ class Interaction:
 
         def find_treatment(labels):
             for label in labels:
-                if label.startswith(self.treatment_type):
+                if label == self.treatment_name:
                     return label
             return "NoTreatment"
 
@@ -644,15 +655,22 @@ parser.add_argument(
     default=[],
 )
 parser.add_argument(
+    "--score",
+    help="Specify which classification score to use for fault visibility",
+    action="store",
+    choices=["f1", "accuracy"]
+)
+parser.add_argument(
     "--split",
     help="Specify the test data size. Must be between 0 and 1",
     type=valid_split_range,
     default=0.3
 )
 parser.add_argument(
-    "--fold",
+    "--folds",
     help="The number of cross-validation folds to use for the classifier",
-    default=5,
+    default=10,
+    type=int,
 )
 parser.add_argument(
     "--write-plots",
@@ -662,6 +680,11 @@ parser.add_argument(
 parser.add_argument(
     "--cross",
     help="Compute cross-predictions to evaluate fault ambiguity",
+    action="store_true",
+)
+parser.add_argument(
+    "--use-traces",
+    help="Use aggregated traces to train the model instead of raw spans",
     action="store_true",
 )
 
@@ -688,12 +711,12 @@ if __name__ == "__main__":
     for classifier in args.classifier:
         for report in reports:
             for interaction in report.interactions:
-                model = interaction.get_model()
+                model = interaction.get_model(score=args.score, use_traces=args.use_traces)
                 dataframe = interaction.get_data()
                 if classifier == "GBT":
                     model.build_gb(split=args.split)
                 if classifier == "LR":
-                    model.build_lr(split=args.split)
+                    model.build_lr(split=args.split, folds=args.folds)
                 visibility_data.append([
                     str(report),
                     interaction.treatment_name,
@@ -719,6 +742,6 @@ if __name__ == "__main__":
             "response_name",
             "response_type",
             "classifier",
-            "visibility"
+            f"visibility[{args.score}]"
         ])
         print(visibility_df)
