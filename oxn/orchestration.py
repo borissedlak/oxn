@@ -131,13 +131,18 @@ class DockerComposeOrchestrator:
             )
 
     def _initialize_docker_client(self):
-        self.docker_client = docker.from_env()
         try:
+            self.docker_client = docker.from_env()
             self.docker_client.ping()
         except docker.errors.APIError as docker_api_error:
             raise OrchestrationException(
                 message="Error while building the sue",
                 explanation=docker_api_error.explanation,
+            )
+        except docker.errors.DockerException as docker_exception:
+            raise OrchestrationException(
+                message="Cannot connect to docker daemon",
+                explanation=docker_exception,
             )
 
     def _locate_otelcol_extras(self):
@@ -205,6 +210,7 @@ class DockerComposeOrchestrator:
             except NotFound as e:
                 raise OrchestrationException(message="Error while building the sue", explanation=e)
         # TODO: container "running" state does not mean the service is responsive yet
+        # TODO: throw exception if container object is not accessible
         return all(all_ready)
 
     def teardown(self):
