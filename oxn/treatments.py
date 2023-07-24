@@ -677,7 +677,7 @@ class PacketLossTreatment(Treatment):
     def inject(self):
         duration_seconds = self.config.get("duration_integer")
         service = self.config.get("service_name")
-        percentage = self.config.get("percentage")
+        percentage = self.config.get("loss_percentage")
         interface = self.config.get("interface")
         command = [
             "tc",
