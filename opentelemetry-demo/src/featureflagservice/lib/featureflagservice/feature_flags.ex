@@ -1,3 +1,7 @@
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+
 defmodule Featureflagservice.FeatureFlags do
   @moduledoc """
   The FeatureFlags context.
@@ -31,14 +35,14 @@ defmodule Featureflagservice.FeatureFlags do
 
   ## Examples
 
-      iex> get_feature_flag!(123)
+      iex> get_feature_flag!(foo)
       %FeatureFlag{}
 
-      iex> get_feature_flag!(456)
+      iex> get_feature_flag!(bar)
       ** (Ecto.NoResultsError)
 
   """
-  def get_feature_flag!(id), do: Repo.get!(FeatureFlag, id)
+  def get_feature_flag!(name), do: Repo.get!(FeatureFlag, name)
 
   @doc """
   Gets a single feature_flag by name.

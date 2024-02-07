@@ -21,7 +21,6 @@ performance_experiments/*
 visibility_experiments/*
 visibility_reports/*
 evaluation.py
-*.txt
 *.h5
 *.pickle
 *.ipynb

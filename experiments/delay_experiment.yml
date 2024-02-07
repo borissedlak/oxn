@@ -12,7 +12,7 @@ experiment:
         params: {
           service_name: recommendation-service,
           duration: 30s,
-          delay_time: 100ms,
+          delay_time: 1000ms,
           interface: eth0,
         }
 

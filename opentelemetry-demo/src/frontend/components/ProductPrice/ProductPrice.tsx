@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 import { useMemo } from 'react';
 import getSymbolFromCurrency from 'currency-symbol-map';
 import { Money } from '../../protos/demo';
@@ -16,9 +19,11 @@ const ProductPrice = ({ price: { units, currencyCode, nanos } }: IProps) => {
     [currencyCode, selectedCurrency]
   );
 
+  const total = units + nanos / 1000000000;
+
   return (
     <span data-cy={CypressFields.ProductPrice}>
-      {currencySymbol} {units}.{nanos.toString().slice(0, 2)}
+      {currencySymbol} {total.toFixed(2)}
     </span>
   );
 };

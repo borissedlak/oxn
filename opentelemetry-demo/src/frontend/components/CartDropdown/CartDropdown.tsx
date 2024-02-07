@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { CypressFields } from '../../utils/Cypress';
@@ -53,7 +56,7 @@ const CartDropdown = ({ productList, isOpen, onClose }: IProps) => {
         </S.ItemList>
       </div>
       <Link href="/cart">
-        <S.CartButton data-cy={CypressFields.CartGoToShopping}>Go to Shipping Cart</S.CartButton>
+        <S.CartButton data-cy={CypressFields.CartGoToShopping}>Go to Shopping Cart</S.CartButton>
       </Link>
     </S.CartDropdown>
   ) : null;

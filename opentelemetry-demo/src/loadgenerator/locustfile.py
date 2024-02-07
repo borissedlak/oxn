@@ -1,36 +1,41 @@
 #!/usr/bin/python
-#
-# Copyright 2018 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
+# Copyright The OpenTelemetry Authors
+# SPDX-License-Identifier: Apache-2.0
+
+
+import json
+import os
 import random
 import uuid
 from locust import HttpUser, task, between
+from locust_plugins.users.playwright import PlaywrightUser, pw, PageWithRetry, event
 
 from opentelemetry import context, baggage, trace
+from opentelemetry.metrics import set_meter_provider
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import MetricExporter, PeriodicExportingMetricReader
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.jinja2 import Jinja2Instrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
 from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
+from playwright.async_api import Route, Request
+
+exporter = OTLPMetricExporter(insecure=True)
+set_meter_provider(MeterProvider([PeriodicExportingMetricReader(exporter)]))
 
 tracer_provider = TracerProvider()
 trace.set_tracer_provider(tracer_provider)
 tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
 
 # Instrumenting manually to avoid error with locust gevent monkey
+Jinja2Instrumentor().instrument()
 RequestsInstrumentor().instrument()
+SystemMetricsInstrumentor().instrument()
 URLLib3Instrumentor().instrument()
 
 categories = [
@@ -39,6 +44,8 @@ categories = [
     "accessories",
     "assembly",
     "travel",
+    "books",
+    None,
 ]
 
 products = [
@@ -51,163 +58,11 @@ products = [
     "L9ECAV7KIM",
     "LS4PSXUNUM",
     "OLJCESPC7Z",
+    "HQTGWGPNH4",
 ]
 
-people = [
-    {
-        "email": "larry_sergei@example.com",
-        "address": {
-            "streetAddress": "1600 Amphitheatre Parkway",
-            "zipCode": "94043",
-            "city": "Mountain View",
-            "state": "CA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4432-8015-6152-0454",
-            "creditCardExpirationMonth": 1,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 672,
-        },
-    },
-    {
-        "email": "bill@example.com",
-        "address": {
-            "streetAddress": "One Microsoft Way",
-            "zipCode": "98052",
-            "city": "Redmond",
-            "state": "WA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4532-4211-7434-1278",
-            "creditCardExpirationMonth": 2,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 114,
-        },
-    },
-    {
-        "email": "steve@example.com",
-        "address": {
-            "streetAddress": "One Apple Park Way",
-            "zipCode": "95014",
-            "city": "Cupertino",
-            "state": "CA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4532-6178-2799-1951",
-            "creditCardExpirationMonth": 3,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 239,
-        },
-    },
-    {
-        "email": "mark@example.com",
-        "address": {
-            "streetAddress": "1 Hacker Way",
-            "zipCode": "94025",
-            "city": "Menlo Park",
-            "state": "CA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4539-1103-5661-7083",
-            "creditCardExpirationMonth": 4,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 784,
-        },
-    },
-    {
-        "email": "jeff@example.com",
-        "address": {
-            "streetAddress": "410 Terry Ave N",
-            "zipCode": "98109",
-            "city": "Seattle",
-            "state": "WA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4916-0816-6217-7968",
-            "creditCardExpirationMonth": 5,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 397,
-        },
-    },
-    {
-        "email": "reed@example.com",
-        "address": {
-            "streetAddress": "100 Winchester Circle",
-            "zipCode": "95032",
-            "city": "Los Gatos",
-            "state": "CA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4929-5431-0337-5647",
-            "creditCardExpirationMonth": 6,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 793,
-        },
-    },
-    {
-        "email": "tobias@example.com",
-        "address": {
-            "streetAddress": "150 Elgin St",
-            "zipCode": "K2P1L4",
-            "city": "Ottawa",
-            "state": "ON",
-            "country": "Canada",
-        },
-        "userCurrency": "CAD",
-        "creditCard": {
-            "creditCardNumber": "4763-1844-9699-8031",
-            "creditCardExpirationMonth": 7,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 488,
-        },
-    },
-    {
-        "email": "jack@example.com",
-        "address": {
-            "streetAddress": "1355 Market St",
-            "zipCode": "94103",
-            "city": "San Francisco",
-            "state": "CA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4929-6495-8333-3657",
-            "creditCardExpirationMonth": 8,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 159,
-        },
-    },
-    {
-        "email": "moore@example.com",
-        "address": {
-            "streetAddress": "2200 Mission College Blvd",
-            "zipCode": "95054",
-            "city": "Santa Clara",
-            "state": "CA",
-            "country": "United States",
-        },
-        "userCurrency": "USD",
-        "creditCard": {
-            "creditCardNumber": "4485-4803-8707-3547",
-            "creditCardExpirationMonth": 9,
-            "creditCardExpirationYear": 2039,
-            "creditCardCvv": 682,
-        },
-    },
-]
+people_file = open('people.json')
+people = json.load(people_file)
 
 
 class WebsiteUser(HttpUser):
@@ -226,7 +81,7 @@ class WebsiteUser(HttpUser):
         params = {
             "productIds": [random.choice(products)],
         }
-        self.client.get("/api/recommendations/", params=params)
+        self.client.get("/api/recommendations", params=params)
 
     @task(3)
     def get_ads(self):
@@ -277,3 +132,43 @@ class WebsiteUser(HttpUser):
         ctx = baggage.set_baggage("synthetic_request", "true")
         context.attach(ctx)
         self.index()
+
+
+browser_traffic_enabled = os.environ.get("LOCUST_BROWSER_TRAFFIC_ENABLED", "").lower() in ("true", "yes", "on")
+
+if browser_traffic_enabled:
+    class WebsiteBrowserUser(PlaywrightUser):
+        headless = True  # to use a headless browser, without a GUI
+
+        @task
+        @pw
+        async def open_cart_page_and_change_currency(self, page: PageWithRetry):
+            try:
+                page.on("console", lambda msg: print(msg.text))
+                await page.route('**/*', add_baggage_header)
+                await page.goto("/cart", wait_until="domcontentloaded")
+                await page.select_option('[name="currency_code"]', 'CHF')
+                await page.wait_for_timeout(2000)  # giving the browser time to export the traces
+            except:
+                pass
+
+        @task
+        @pw
+        async def add_product_to_cart(self, page: PageWithRetry):
+            try:
+                page.on("console", lambda msg: print(msg.text))
+                await page.route('**/*', add_baggage_header)
+                await page.goto("/", wait_until="domcontentloaded")
+                await page.click('p:has-text("Roof Binoculars")', wait_until="domcontentloaded")
+                await page.click('button:has-text("Add To Cart")', wait_until="domcontentloaded")
+                await page.wait_for_timeout(2000)  # giving the browser time to export the traces
+            except:
+                pass
+
+
+async def add_baggage_header(route: Route, request: Request):
+    headers = {
+        **request.headers,
+        'baggage': 'synthetic_request=true'
+    }
+    await route.continue_(headers=headers)

@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 """Evaluate experiment reports created by oxn"""
 import itertools
 # TODO: figure out a way to use multiple feature columns

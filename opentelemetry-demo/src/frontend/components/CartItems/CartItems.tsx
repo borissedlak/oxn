@@ -1,5 +1,8 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 import { useMemo } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import ApiGateway from '../../gateways/Api.gateway';
 import { Address, Money } from '../../protos/demo';
 import { useCurrency } from '../../providers/Currency.provider';
@@ -16,26 +19,34 @@ interface IProps {
 const CartItems = ({ productList, shouldShowPrice = true }: IProps) => {
   const { selectedCurrency } = useCurrency();
   const address: Address = {
-      streetAddress: '1600 Amphitheatre Parkway',
-      city: 'Mountain View',
-      state: 'CA',
-      country: 'United States',
-      zipCode: "94043",
+    streetAddress: '1600 Amphitheatre Parkway',
+    city: 'Mountain View',
+    state: 'CA',
+    country: 'United States',
+    zipCode: '94043',
   };
-  const { data: shippingConst = { units: 0, currencyCode: 'USD', nanos: 0 } } = useQuery('shipping', () =>
+
+  const { data: shippingConst = { units: 0, currencyCode: 'USD', nanos: 0 } } = useQuery(['shipping',
+      productList, selectedCurrency, address], () =>
     ApiGateway.getShippingCost(productList, selectedCurrency, address)
   );
 
-  const total = useMemo<Money>(
-    () => ({
-      units:
-        productList.reduce((acc, item) => acc + (item.product.priceUsd?.units || 0) * item.quantity, 0) +
-        (shippingConst?.units || 0),
+  const total = useMemo<Money>(() => {
+    const nanoSum =
+      productList.reduce((acc, { product: { priceUsd: { nanos = 0 } = {} } }) => acc + Number(nanos), 0) +
+        shippingConst?.nanos || 0;
+    const nanoExceed = Math.floor(nanoSum / 1000000000);
+
+    const unitSum =
+      productList.reduce((acc, { product: { priceUsd: { units = 0 } = {} } }) => acc + Number(units), 0) +
+        (shippingConst?.units || 0) + nanoExceed;
+
+    return {
+      units: unitSum,
       currencyCode: selectedCurrency,
-      nanos: 0,
-    }),
-    [productList, shippingConst?.units, selectedCurrency]
-  );
+      nanos: nanoSum % 1000000000,
+    };
+  }, [shippingConst?.units, shippingConst?.nanos, productList, selectedCurrency]);
 
   return (
     <S.CartItems>

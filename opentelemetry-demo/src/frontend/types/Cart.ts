@@ -1,4 +1,7 @@
-import { Cart, OrderItem, OrderResult, Product } from '../protos/demo';
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+import {Address, Cart, OrderItem, OrderResult, Product} from '../protos/demo';
 
 export interface IProductCartItem {
   productId: string;
@@ -12,6 +15,7 @@ export interface IProductCheckoutItem extends OrderItem {
 
 export interface IProductCheckout extends OrderResult {
   items: IProductCheckoutItem[];
+  shippingAddress: Address;
 }
 
 export interface IProductCart extends Cart {

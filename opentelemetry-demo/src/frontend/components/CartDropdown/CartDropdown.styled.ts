@@ -1,3 +1,6 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 import Image from 'next/image';
 import styled from 'styled-components';
 import Button from '../Button';
@@ -9,7 +12,6 @@ export const CartDropdown = styled.div`
   width: 100%;
   height: 100%;
   max-height: 100%;
-  overflow-y: scroll;
   padding: 25px;
   display: flex;
   flex-direction: column;
