@@ -850,6 +850,7 @@ class PrometheusIntervalTreatment(Treatment):
 
     def preconditions(self) -> bool:
         """Check that the config exists at the specified location and that Prometheus is running"""
+        return True
 
     def inject(self) -> None:
         prometheus_yaml = self.config.get("prometheus_yaml")

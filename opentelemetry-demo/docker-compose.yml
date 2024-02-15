@@ -29,7 +29,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 500M
     restart: unless-stopped
     environment:
       - KAFKA_SERVICE_ADDR
@@ -56,7 +56,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 1024M
     restart: unless-stopped
     ports:
       - "${AD_SERVICE_PORT}"
@@ -85,7 +85,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 160M
+          memory: 600M
     restart: unless-stopped
     ports:
       - "${CART_SERVICE_PORT}"
@@ -116,7 +116,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 500M
     restart: unless-stopped
     ports:
       - "${CHECKOUT_SERVICE_PORT}"
@@ -166,7 +166,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 500M
     restart: unless-stopped
     ports:
       - "${CURRENCY_SERVICE_PORT}"
@@ -190,7 +190,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 100M
+          memory: 700M
     restart: unless-stopped
     ports:
       - "${EMAIL_SERVICE_PORT}"
@@ -217,7 +217,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 175M
+          memory: 1024M
     restart: unless-stopped
     ports:
       - "${FEATURE_FLAG_SERVICE_PORT}"                                  # Feature Flag Service UI
@@ -248,7 +248,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 200M
+          memory: 1024M
     restart: unless-stopped
     environment:
       - KAFKA_SERVICE_ADDR
@@ -275,7 +275,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 200M
+          memory: 1024M
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT}"
@@ -328,7 +328,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 50M
+          memory: 300M
     ports:
       - "${ENVOY_PORT}:${ENVOY_PORT}"
       - 10000:10000
@@ -372,7 +372,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 1024M
     restart: unless-stopped
     ports:
       - "${LOCUST_WEB_PORT}"
@@ -405,7 +405,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 120M
+          memory: 1024M
     restart: unless-stopped
     ports:
       - "${PAYMENT_SERVICE_PORT}"
@@ -432,7 +432,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 1024M
     restart: unless-stopped
     ports:
       - "${PRODUCT_CATALOG_SERVICE_PORT}"
@@ -460,7 +460,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 40M
+          memory: 500M
     restart: unless-stopped
     ports:
       - "${QUOTE_SERVICE_PORT}"
@@ -488,8 +488,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 500M               # This is high to enable supporting the recommendationCache feature flag use case
+          memory: 2048M               # This is high to enable supporting the recommendationCache feature flag use case
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN # needed for tc to work
     ports:
       - "${RECOMMENDATION_SERVICE_PORT}"
     environment:
@@ -502,6 +504,8 @@ services:
       - OTEL_RESOURCE_ATTRIBUTES
       - OTEL_SERVICE_NAME=recommendationservice
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
     depends_on:
       featureflagservice:
         condition: service_started
@@ -523,7 +527,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 500M
     restart: unless-stopped
     ports:
       - "${SHIPPING_SERVICE_PORT}"
@@ -553,7 +557,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 120M
+          memory: 1024M
     restart: unless-stopped
     environment:
       - POSTGRES_USER=ffs
@@ -580,7 +584,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 500M
+          memory: 1600M
     restart: unless-stopped
     environment:
       - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
@@ -605,7 +609,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 20M
+          memory: 500M
     restart: unless-stopped
     ports:
       - "${REDIS_PORT}"
@@ -628,13 +632,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 16384M
     restart: unless-stopped
     ports:
       - "${JAEGER_SERVICE_PORT}"         # Jaeger UI
       - "${OTEL_COLLECTOR_PORT_GRPC}"
     environment:
       - METRICS_STORAGE_TYPE=prometheus
+      - COLLECTOR_OTLP_ENABLED=true
     logging: *logging
 
   # Grafana
@@ -662,7 +667,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 125M
+          memory: 1024M
     restart: unless-stopped
     command: [ "--config=/etc/otelcol-config.yml", "--config=/etc/otelcol-config-extras.yml" ]
     volumes:
@@ -888,3 +893,21 @@ services:
       retries: 60
     ports:
       - 5432
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    privileged: true
+    ports: 
+      - "8181:8181"
+    command:
+      - '-port=8181'
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+    devices: 
+      - "/dev/kmsg"
+    expose:
+      - 8181
