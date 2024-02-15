@@ -30,7 +30,7 @@ experiment:
         params: {
           service_name: recommendation-service,
           duration: 120s,
-          loss_percentage: 50%,
+          loss_percentage: 15%,
           interface: eth0,
         }
   sue:

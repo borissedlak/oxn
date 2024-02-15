@@ -113,4 +113,7 @@ class Observer:
 
     def observe(self) -> None:
         for variable in self.variables().values():
-            variable.observe()
+            try:
+                variable.observe()
+            except Exception as e:
+                logger.info(f"failed to capture {variable.name}, proceeding. {e}")

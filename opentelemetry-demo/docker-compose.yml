@@ -506,6 +506,7 @@ services:
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
       - OTEL_TRACES_EXPORTER=otlp
       - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_METRIC_EXPORT_INTERVAL=5000
     depends_on:
       featureflagservice:
         condition: service_started
@@ -624,7 +625,7 @@ services:
     image: ${JAEGERTRACING_IMAGE}
     container_name: jaeger
     command:
-      - "--memory.max-traces=5000"
+      - "--memory.max-traces=100000"
       - "--query.base-path=/jaeger/ui"
       - "--prometheus.server-url=http://${PROMETHEUS_ADDR}"
       - "--prometheus.query.normalize-calls=true"
@@ -902,6 +903,8 @@ services:
       - "8181:8181"
     command:
       - '-port=8181'
+      - '--housekeeping_interval=5s'
+      - '--docker_only'
     volumes:
       - "/:/rootfs:ro"
       - "/var/run:/var/run:ro"

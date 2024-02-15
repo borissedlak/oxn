@@ -215,5 +215,7 @@ class DockerComposeOrchestrator:
 
     def teardown(self):
         """Stop the containers specified in compose file"""
+        if "OXN_WAIT" in os.environ:
+            time.sleep(int(os.environ["OXN_WAIT"]))
         self.compose_client.compose.down(remove_orphans=True, quiet=True)
         self.docker_client.close()
