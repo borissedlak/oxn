@@ -3,29 +3,27 @@ experiment:
     - frontend_traces:
         type: trace
         service_name: frontend 
-        left_window: 300s 
-        right_window: 300s 
+        left_window: 240s 
+        right_window: 240s 
         limit: 100000
     - system_CPU:
         type: metric
         metric_name: sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_project="opentelemetry-demo"}[1m]))
-        left_window: 300s 
-        right_window: 300s
+        left_window: 240s 
+        right_window: 240s
         step: 1
     - recommendations_total:
         type: metric
         metric_name: increase(app_recommendations_counter_total[1m])
-        left_window: 300s 
-        right_window: 300s
+        left_window: 240s 
+        right_window: 240s
         step: 1
   treatments:
     - packet_loss_treatment:
-        action: loss
+        action: pause
         params: {
           service_name: recommendation-service,
           duration: 120s,
-          loss_percentage: 50%,
-          interface: eth0,
         }
   sue:
     compose: opentelemetry-demo/docker-compose.yml

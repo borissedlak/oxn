@@ -506,7 +506,7 @@ services:
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
       - OTEL_TRACES_EXPORTER=otlp
       - OTEL_METRICS_EXPORTER=otlp
-      - OTEL_METRIC_EXPORT_INTERVAL=5000
+      - OTEL_METRIC_EXPORT_INTERVAL=30000
     depends_on:
       featureflagservice:
         condition: service_started
