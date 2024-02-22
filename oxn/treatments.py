@@ -374,6 +374,141 @@ class TailSamplingTreatment(Treatment):
             self.config["otelcol_extras_yaml"] = contents
 
 
+class PropbalisticSamplingTreatment(Treatment):
+    """
+    Add change ProbalisticSampling Treatmentes for Tracing
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.client = docker.from_env()
+
+    @property
+    def action(self):
+        return "probl"
+
+    def preconditions(self) -> bool:
+        """
+        Check that the collector exists and is running
+
+        Not implemented yet
+        """
+        return True
+
+    def inject(self) -> None:
+        """Write the policy to the otelcol-extras file"""
+        path = self.config.get("otelcol_extras")
+        # get existing configuration
+        sampling_percentage = self.config.get("sampling_percentage",1)
+        # inject the policy
+        updated_extras = {
+            "processors": {
+                "probabilistic_sampler": {
+                    "hash_seed": "22",
+                    "sampling_percentage": sampling_percentage,
+                }
+            },
+            "service": {
+                "pipelines": {
+                    "traces": {
+                        "processors": ["probabilistic_sampler"],
+                    }
+                }
+            },
+        }
+        # TODO: the current method is very blunt and assumes empty extras
+        with open(path, "w+") as file:
+            file.write(yaml.dump(updated_extras, default_flow_style=False))
+
+        # restart the collector and block until it has restarted
+        container = self.client.containers.get("otel-col")
+        container.stop()
+        container.wait()
+        container.start()
+
+        duration = self.config.get("duration", "0m")
+        if duration:
+            seconds = time_string_to_seconds(duration)
+            time.sleep(seconds)
+
+    @defer_cleanup
+    def clean(self) -> None:
+        original_extras = self.config.get("otelcol_extras_yaml")
+        path = self.config.get("otelcol_extras")
+        with open(path, "w+") as file:
+            file.write(yaml.dump(original_extras, default_flow_style=False))
+
+    def params(self) -> dict:
+        return {
+            "otelcol_extras": str,
+            "sampling_percentage": int,
+            "decision_wait": str
+        }
+
+    def _validate_params(self) -> bool:
+        # TODO: implement the method
+        return True
+
+    def _transform_params(self) -> None:
+        path = self.config.get("otelcol_extras")
+        with open(path, "r") as file:
+            contents = yaml.safe_load(file.read())
+            if not contents:
+                contents = {}
+            self.config["otelcol_extras_yaml"] = contents
+
+
+class OtelSamplingRateTreatment(Treatment):
+    """
+     Change the OTEL SamplingRate of a specifc service.
+     We assume that the container is reloading the /etc/enviromnt file on restart.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.client = docker.from_env()
+    
+    @defer_cleanup
+    def clean(self) -> None:
+        service_name = self.config.get("service_name")
+        container = self.client.containers.get(service_name)
+        code = container.exec_run(["sh","-c",'"" > /etc/environment'],stdout=False,
+        stderr=False)
+        print(code)
+        container.restart()
+
+
+    def _validate_params(self) -> bool:
+        # needs implementation
+        return True
+
+    def inject(self) -> None:
+        service_name = self.config.get("service_name")
+        export_interval_ms = self.config.get("export_interval_ms",60000)
+        container = self.client.containers.get(service_name)
+        code = container.exec_run(["sh","-c",f"echo \"OTEL_METRIC_EXPORT_INTERVAL={export_interval_ms}\" > /etc/environment "],stdout=False,
+        stderr=False)
+        logger.info(f"injected new otel config {code} in {service_name}")
+        container.stop()
+        container.wait()
+        container.start()
+
+    def params(self) -> dict:
+        return {
+            "service_name": str,
+            "export_interval_ms": int
+        }
+
+    def preconditions(self) -> bool:
+        return True
+    
+    def _transform_params(self) -> None:
+        pass
+
+    @property
+    def action(self):
+        return "otel"
+
+
 class PauseTreatment(Treatment):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

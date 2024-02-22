@@ -20,6 +20,8 @@ from .treatments import (
     StressTreatment,
     TailSamplingTreatment,
     KillTreatment,
+    PropbalisticSamplingTreatment,
+    OtelSamplingRateTreatment,
 )
 from . import utils
 from .observer import Observer
@@ -51,6 +53,8 @@ class ExperimentRunner:
         "stress": StressTreatment,
         "sampling": PrometheusIntervalTreatment,
         "tail": TailSamplingTreatment,
+        "otel": OtelSamplingRateTreatment,
+        "probl": PropbalisticSamplingTreatment,
     }
 
     def __init__(
