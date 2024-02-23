@@ -55,5 +55,6 @@ def main():
             engine.generator.kill()
             logger.info("Shut down load generation")
         if engine.sue_running:
+            # TODO: call cleanup methods here
             engine.orchestrator.teardown()
             logger.info("Shut down sue")
