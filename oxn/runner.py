@@ -20,6 +20,8 @@ from .treatments import (
     StressTreatment,
     TailSamplingTreatment,
     KillTreatment,
+    ProbabilisticSamplingTreatment,
+    MetricsExportIntervalTreatment,
 )
 from . import utils
 from .observer import Observer
@@ -51,6 +53,8 @@ class ExperimentRunner:
         "stress": StressTreatment,
         "sampling": PrometheusIntervalTreatment,
         "tail": TailSamplingTreatment,
+        "probabilistic_sampling": ProbabilisticSamplingTreatment,
+        "metrics_interval":  MetricsExportIntervalTreatment,
     }
 
     def __init__(
@@ -139,6 +143,7 @@ class ExperimentRunner:
             self.treatments[key] = self._build_treatment(
                 action=action, params=params, name=key
             )
+            logger.debug("Successfully built treatment %s", self.treatments[key])
 
     def _build_treatment(self, action, params, name) -> Treatment:
         """Build a single treatment from a description"""
@@ -150,6 +155,7 @@ class ExperimentRunner:
                 message=f"Error while building treatment {name}",
                 explanation=f"Treatment key {action} does not exist in the treatment library",
             )
+        # TODO: move this out of the method. has to be called from the engine because the engine knows when services are ready
         if not instance.preconditions():
             raise OxnException(
                 message=f"Error while checking preconditions for treatment {name}",
@@ -162,6 +168,8 @@ class ExperimentRunner:
         for treatment in self.additional_treatments:
             self.treatment_keys |= {treatment.action: treatment}
 
+
+    # TODO: split into two methods, one that relies on container being started and one that modifies container infrastructure before theyre started
     def execute(self) -> None:
         """
         Execute one run of the experiment
