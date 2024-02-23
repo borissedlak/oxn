@@ -172,13 +172,13 @@ class ExperimentRunner:
     def _get_runtime_treatments(self) -> List[Treatment]:
         return [
             treatment for treatment in self.treatments.values()
-            if treatment.is_runtime
+            if treatment.is_runtime()
         ]
 
     def _get_compile_time_treatments(self) -> List[Treatment]:
         return [
             treatment for treatment in self.treatments.values()
-            if not treatment.is_runtime
+            if not treatment.is_runtime()
         ]
 
     def execute_compile_time_treatments(self) -> None:

@@ -18,7 +18,7 @@ from oxn.utils import (
     time_string_to_seconds,
     validate_time_string,
     time_string_format_regex,
-    defer_cleanup, add_env_variable, remove_env_variable,
+    add_env_variable, remove_env_variable, to_milliseconds,
 )
 from oxn.models.treatment import Treatment
 
@@ -70,6 +70,9 @@ class EmptyTreatment(Treatment):
     @property
     def action(self):
         return "empty"
+
+    def is_runtime(self):
+        return True
 
 
 class ByteMonkeyTreatment(Treatment):
@@ -281,11 +284,6 @@ class CorruptPacketTreatment(Treatment):
 class MetricsExportIntervalTreatment(Treatment):
     """
     Modify the OTEL_METRICS_EXPORT interval for a given container
-
-    TODO: i think this needs to be implemented before runtime, i.e. before we start the containers
-    NOTE: restarting the containers messes with the data a lot, it would be cleaner to avoid restarting containers at all
-    NOTE: same logic could be applied for the sampling treatment
-    NOTE: probably also best to remove left and right windows, and just have one period before experiment start for no treatment labelled data and then take the experiment data and label that
     """
 
     def __init__(self, *args, **kwargs):
@@ -312,19 +310,19 @@ class MetricsExportIntervalTreatment(Treatment):
         add_env_variable(
             compose_file_path=compose_file,
             service_name=service,
-            variable_name="OTEL_METRICS_EXPORT_INTERVAL",
+            variable_name="OTEL_METRIC_EXPORT_INTERVAL",
             variable_value=str(interval_ms),
         )
-        self.compose_client.compose.restart(services=[service])
 
-    @defer_cleanup
     def clean(self) -> None:
         compose_file = self.config.get("compose_file")
         service_name = self.config.get("service_name")
+        interval_ms = self.config.get("interval_ms")
         remove_env_variable(
             compose_file_path=compose_file,
             service_name=service_name,
-            variable_name="OTEL_METRICS_EXPORT_INTERVAL"
+            variable_name="OTEL_METRICS_EXPORT_INTERVAL",
+            variable_value=interval_ms
         )
 
     def params(self) -> dict:
@@ -352,16 +350,18 @@ class MetricsExportIntervalTreatment(Treatment):
 
     def _transform_params(self) -> None:
         """Convert the provided time string into milliseconds"""
-        interval_ms = time_string_to_seconds(self.config["interval"]) * 1000
+        interval_s = time_string_to_seconds(self.config["interval"])
+        interval_ms = to_milliseconds(interval_s)
         self.config["interval_ms"] = interval_ms
+
+    def is_runtime(self) -> bool:
+        return True
 
 
 class ProbabilisticSamplingTreatment(Treatment):
     """
     Add a probabilistic sampling policy to the opentelemetry collector
     """
-
-    action = "probabilistic_sampling"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -371,28 +371,12 @@ class ProbabilisticSamplingTreatment(Treatment):
     def action(self):
         return "probabilistic_sampling"
 
+    def is_runtime(self) -> bool:
+        return False
+
     def preconditions(self) -> bool:
-        try:
-            container = self.client.containers.get("otel-col")
-            container_state = container.status
-            logger.info(
-                f"Probed container otel-col for state running with result {container_state}"
-            )
-            if not container_state == "running":
-                self.messages.append(
-                    f"Container otel-col is not running which is required for {self.treatment_type}"
-                )
-            return container_state == "running"
-        except ContainerNotFound:
-            self.messages.append(
-                f"Can't find container otel-col for {self.treatment_type}"
-            )
-            return False
-        except DockerAPIError as error:
-            self.messages.append(
-                f"Can't talk to Docker API: {error.explanation} in {self.treatment_type}"
-            )
-            return False
+        # TODO: write tests to check if file exists
+        return True
 
     def inject(self) -> None:
         path = self.config.get("otelcol_extras")
@@ -421,11 +405,6 @@ class ProbabilisticSamplingTreatment(Treatment):
             existing_config.update(updated_extras)
             yaml.dump(existing_config, file, default_flow_style=False)
 
-        # restart the collector and block until it has restarted
-        container = self.client.containers.get("otel-col")
-        container.restart()
-
-    @defer_cleanup
     def clean(self) -> None:
         original_extras = self.config.get("otelcol_extras_yaml")
         path = self.config.get("otelcol_extras")
@@ -481,6 +460,9 @@ class TailSamplingTreatment(Treatment):
     def action(self):
         return "tail"
 
+    def is_runtime(self) -> bool:
+        return True
+
     def preconditions(self) -> bool:
         """
         Check that the collector exists and is running
@@ -517,7 +499,6 @@ class TailSamplingTreatment(Treatment):
                 }
             },
         }
-        # TODO: the current method is very blunt and assumes empty extras
         with open(path, "w+") as file:
             file.write(yaml.dump(updated_extras, default_flow_style=False))
 
@@ -532,7 +513,6 @@ class TailSamplingTreatment(Treatment):
             seconds = time_string_to_seconds(duration)
             time.sleep(seconds)
 
-    @defer_cleanup
     def clean(self) -> None:
         original_extras = self.config.get("otelcol_extras_yaml")
         path = self.config.get("otelcol_extras")
@@ -564,9 +544,13 @@ class TailSamplingTreatment(Treatment):
 
 
 class PauseTreatment(Treatment):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = docker.from_env()
+
+    def is_runtime(self) -> bool:
+        return True
 
     @property
     def action(self):
@@ -668,6 +652,9 @@ class NetworkDelayTreatment(Treatment):
         self.client = docker.from_env()
 
     action = "delay"
+
+    def is_runtime(self) -> bool:
+        return True
 
     def _validate_params(self) -> bool:
         for key, val in self.params().items():
@@ -802,6 +789,9 @@ class PacketLossTreatment(Treatment):
         self.client = docker.from_env()
 
     action = "loss"
+
+    def is_runtime(self) -> bool:
+        return True
 
     def params(self) -> dict:
         return {
@@ -1001,6 +991,9 @@ class KillTreatment(Treatment):
         relative_time_seconds = time_string_to_seconds(relative_time_string)
         self.config |= {"duration_seconds": relative_time_seconds}
 
+    def is_runtime(self) -> bool:
+        return True
+
 
 class PacketReorderTreatment(Treatment):
     """
@@ -1051,7 +1044,6 @@ class PrometheusIntervalTreatment(Treatment):
         # TODO: infer the url from docker compose file or have it be user provided
         requests.post("http://localhost:9090/-/reload")
 
-    @defer_cleanup
     def clean(self) -> None:
         prometheus_yaml = self.config.get("prometheus_yaml")
         prometheus_yaml["global"]["scrape_interval"] = self.config.get(
@@ -1108,6 +1100,9 @@ class PrometheusIntervalTreatment(Treatment):
     @property
     def action(self):
         return "sampling"
+
+    def is_runtime(self) -> bool:
+        return False
 
 
 class StressTreatment(Treatment):
@@ -1213,3 +1208,6 @@ class StressTreatment(Treatment):
             for stressor_name, stressor_count in self.config["stressors"].items():
                 prefixed_stressor = f"--{stressor_name}"
                 self.stressors[prefixed_stressor] = str(stressor_count)
+
+    def is_runtime(self) -> bool:
+        return False

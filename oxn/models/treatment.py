@@ -119,7 +119,6 @@ class Treatment(abc.ABC):
         depending on the use case.
         """
 
-    @property
     @abc.abstractmethod
     def is_runtime(self) -> bool:
         """
