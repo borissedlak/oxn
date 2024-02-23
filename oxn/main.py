@@ -47,7 +47,7 @@ def main():
     except JaegerException as jaeger_expcetion:
         logger.error(f"JaegerException: {jaeger_expcetion}")
     except OxnException as oxn_exception:
-        logger.error(f"OxnExcpetion: {oxn_exception}")
+        logger.error(f"OxnException: {oxn_exception}")
     except KeyboardInterrupt:
         logger.info("Trying to shut down gracefully. Press ctrl-c to force")
     finally:
