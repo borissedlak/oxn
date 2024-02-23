@@ -1,5 +1,6 @@
 """Implementations of Response Variables"""
 import datetime
+import logging
 
 import numpy as np
 import pandas as pd
@@ -17,11 +18,11 @@ class MetricResponseVariable(ResponseVariable):
         return self.id[:8]
 
     def __init__(
-        self,
-        name: str,
-        experiment_start: float,
-        experiment_end: float,
-        description: dict,
+            self,
+            name: str,
+            experiment_start: float,
+            experiment_end: float,
+            description: dict,
     ):
         super().__init__(
             experiment_start=experiment_start, experiment_end=experiment_end
@@ -76,11 +77,11 @@ class MetricResponseVariable(ResponseVariable):
         return utils.humanize_utc_timestamp(self.end)
 
     def label(
-        self,
-        treatment_start: float,
-        treatment_end: float,
-        label_column: str,
-        label: str,
+            self,
+            treatment_start: float,
+            treatment_end: float,
+            label_column: str,
+            label: str,
     ) -> None:
         """
         Label a Prometheus dataframe. Note that Prometheus returns timestamps in seconds as a float
@@ -88,7 +89,7 @@ class MetricResponseVariable(ResponseVariable):
         """
 
         predicate = (treatment_start <= self.data["timestamp"]) & (
-            self.data["timestamp"] <= treatment_end
+                self.data["timestamp"] <= treatment_end
         )
         self.data[label_column] = np.where(predicate, label, "NoTreatment")
 
@@ -175,11 +176,11 @@ class MetricResponseVariable(ResponseVariable):
 
 class TraceResponseVariable(ResponseVariable):
     def __init__(
-        self,
-        name: str,
-        experiment_start: float,
-        experiment_end: float,
-        description: dict,
+            self,
+            name: str,
+            experiment_start: float,
+            experiment_end: float,
+            description: dict,
     ):
         super(TraceResponseVariable, self).__init__(
             experiment_start=experiment_start,
@@ -244,17 +245,17 @@ class TraceResponseVariable(ResponseVariable):
         return int(self.scaled_end_timestamp)
 
     def label(
-        self,
-        treatment_start: float,
-        treatment_end: float,
-        label_column: str,
-        label: str,
+            self,
+            treatment_start: float,
+            treatment_end: float,
+            label_column: str,
+            label: str,
     ) -> None:
         """Label a dataframe containing Jaeger spans depending on the span start timestamp"""
         scaled_treatment_start = utils.to_microseconds(treatment_start)
         scaled_treatment_end = utils.to_microseconds(treatment_end)
         predicate = (self.data["start_time"] >= scaled_treatment_start) & (
-            self.data["start_time"] <= scaled_treatment_end
+                self.data["start_time"] <= scaled_treatment_end
         )
         self.data[label_column] = np.where(predicate, label, "NoTreatment")
 
@@ -317,7 +318,6 @@ class TraceResponseVariable(ResponseVariable):
 
     def observe(self) -> pd.DataFrame:
         """Observe the data service represented by this response variable"""
-
         traces = self.jaeger.search_traces(
             service_name=self.service_name,
             start=self._jaeger_start_timestamp,
