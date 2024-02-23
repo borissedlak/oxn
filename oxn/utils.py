@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Callable
 from datetime import datetime
@@ -5,10 +6,11 @@ from datetime import timezone
 
 import functools
 
+import yaml
 
 SECONDS_MAP = {
-    "us": 1 / 10**6,
-    "ms": 1 / 10**3,
+    "us": 1 / 10 ** 6,
+    "ms": 1 / 10 ** 3,
     "s": 1,
     "m": 60,
     "h": 3600,
@@ -40,12 +42,12 @@ def time_string_to_seconds(time_string) -> float:
 
 def to_milliseconds(seconds):
     """Convert seconds to milliseconds"""
-    return seconds * 10**3
+    return seconds * 10 ** 3
 
 
 def to_microseconds(seconds):
     """Convert seconds to microseconds"""
-    return seconds * 10**6
+    return seconds * 10 ** 6
 
 
 def utc_timestamp() -> float:
@@ -73,3 +75,44 @@ def defer_cleanup(func) -> Callable:
 
     wrapper.defer_cleanup = True
     return wrapper
+
+
+def add_env_variable(compose_file_path, service_name, variable_name, variable_value):
+    """Add an environment variable with a given value to a service in a Docker Compose file"""
+    with open(compose_file_path, 'r') as file:
+        compose_dict = yaml.safe_load(file)
+
+    if service_name not in compose_dict['services']:
+        raise ValueError(f"Service '{service_name}' not found in Docker Compose file")
+
+    if 'environment' not in compose_dict['services'][service_name]:
+        compose_dict['services'][service_name]['environment'] = {}
+
+    environment = compose_dict['services'][service_name]['environment']
+
+    if isinstance(environment, dict):
+        environment[variable_name] = variable_value
+    elif isinstance(environment, list):
+        environment.append(f"{variable_name}={variable_value}")
+    else:
+        raise ValueError("'environment' field is neither a dictionary nor a list")
+
+    with open(compose_file_path, 'w') as file:
+        yaml.safe_dump(compose_dict, file)
+
+
+def remove_env_variable(compose_file_path, service_name, variable_name):
+    """Remove an environment variable from a service in a Docker Compose file"""
+    with open(compose_file_path, 'r') as file:
+        compose_dict = yaml.safe_load(file)
+
+    if service_name not in compose_dict['services']:
+        raise ValueError(f"Service '{service_name}' not found in Docker Compose file")
+
+    if 'environment' in compose_dict['services'][service_name]:
+        if variable_name in compose_dict['services'][service_name]['environment']:
+            idx = compose_dict['services'][service_name]['environment'].index(variable_name)
+            compose_dict['services'][service_name]['environment'].remove(idx)
+
+    with open(compose_file_path, 'w') as file:
+        yaml.safe_dump(compose_dict, file)
