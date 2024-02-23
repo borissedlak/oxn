@@ -7,6 +7,7 @@ from .orchestration import DockerComposeOrchestrator
 from .report import Reporter
 from .store import write_dataframe
 from .loadgen import LoadGenerator
+from .utils import utc_timestamp
 from .validation import syntactic_schema
 from .context import Context
 from .errors import OxnException, OrchestrationException
@@ -77,20 +78,11 @@ class Engine:
 
         logger.info(f"Running experiment {self.config} for {runs} times")
         for idx in range(runs):
+            logger.info(f"Experiment run {idx + 1} of {runs}")
             self.orchestrator = DockerComposeOrchestrator(
                 experiment_config=self.spec,
             )
             self.generator = LoadGenerator(config=self.spec)
-            logger.info(f"Experiment run {idx + 1} of {runs}")
-            self.orchestrator.orchestrate()
-            if not self.orchestrator.ready(timeout=orchestration_timeout):
-                self.orchestrator.teardown()
-                raise OrchestrationException(
-                    message="Error while building the sue",
-                    explanation=f"Could not build the sue within {orchestration_timeout}",
-                )
-            self.sue_running = True
-            logger.info("Started sue")
             names = (
                 self.orchestrator.translate_compose_names(
                     self.orchestrator.sue_service_names
@@ -105,10 +97,24 @@ class Engine:
                 random_treatment_order=randomize,
                 accountant_names=names,
             )
+            self.runner.execute_compile_time_treatments()
+            self.orchestrator.orchestrate()
+            if not self.orchestrator.ready(timeout=orchestration_timeout):
+                self.runner.clean_compile_time_treatments()
+                self.orchestrator.teardown()
+                raise OrchestrationException(
+                    message="Error while building the sue",
+                    explanation=f"Could not build the sue within {orchestration_timeout}",
+                )
+            self.sue_running = True
+            logger.info("Started sue")
             self.generator.start()
             logger.info("Started load generation")
             self.loadgen_running = True
-            self.runner.execute()
+            experiment_start = utc_timestamp()
+            self.runner.experiment_start = experiment_start
+            self.runner.observer.experiment_start = experiment_start
+            self.runner.execute_runtime_treatments()
             self.generator.stop()
             self.loadgen_running = False
             logger.info("Stopped load generation")
