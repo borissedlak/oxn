@@ -108,6 +108,12 @@ class Engine:
                 )
             self.sue_running = True
             logger.info("Started sue")
+            for treatment in self.runner.treatments.values():
+                if not treatment.preconditions():
+                    raise OxnException(
+                        message=f"Error while checking preconditions for treatment {treatment.name}",
+                        explanation="\n".join(treatment.messages),
+                    )
             self.generator.start()
             logger.info("Started load generation")
             self.loadgen_running = True
@@ -115,6 +121,7 @@ class Engine:
             self.runner.experiment_start = experiment_start
             self.runner.observer.experiment_start = experiment_start
             self.runner.execute_runtime_treatments()
+            self.runner.clean_compile_time_treatments()
             self.generator.stop()
             self.loadgen_running = False
             logger.info("Stopped load generation")
