@@ -65,7 +65,7 @@ class Jaeger:
         start=None,
         end=None,
         limit=None,
-        lookback="",
+        lookback=None,
         max_duration=None,
         min_duration=None,
         service_name="adservice",
