@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 # TODO: think about refactoring validation of params into validator class so it can happen earlier
 
-
 class Treatment(abc.ABC):
     def __init__(self, config, name):
         self.id: str = uuid.uuid4().hex
@@ -74,8 +73,8 @@ class Treatment(abc.ABC):
         Preconditions can be anything that is required for the treatment to successfully execute,
         such as third-party software. An implementation of this message should populate the messages
         instance variable to provide helpful error messages in case of unmet preconditions.
-        Implementations of this method can depend on a provisioned SUE as the method always gets called after the SUE
-        has been provisioned.
+        Implementations for runtime treatments of this method can depend on a provisioned SUE,
+        while implementations for compile time treatments cannot.
 
         :return: A boolean indicating if the preconditions for this treatment are met
         """
@@ -119,3 +118,21 @@ class Treatment(abc.ABC):
         This method can be used to supply additional parameters to the injection and cleanup methods,
         depending on the use case.
         """
+
+    @property
+    @abc.abstractmethod
+    def is_runtime(self) -> bool:
+        """
+        Return True if the treatment is a runtime treatment and False otherwise
+
+        Runtime treatments are treatments that are executed when the system under test is
+        built and running, while compile time treatments are executed before the system under test is built.
+        Compile time treatments change properties about the system that require a restart of the system or a rebuilding
+        of the systems containers. We decided on introducing this distinction as it avoids having to restart
+        containers during the runtime of the experiment, which sometimes made implementation awkward and lead to
+        unexpected artefacts in the experiment data.
+
+
+        :return: bool
+        """
+        return True
