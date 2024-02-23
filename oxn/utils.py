@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Callable
 from datetime import datetime
@@ -5,10 +6,13 @@ from datetime import timezone
 
 import functools
 
+import yaml
+
+from oxn.errors import OxnException
 
 SECONDS_MAP = {
-    "us": 1 / 10**6,
-    "ms": 1 / 10**3,
+    "us": 1 / 10 ** 6,
+    "ms": 1 / 10 ** 3,
     "s": 1,
     "m": 60,
     "h": 3600,
@@ -40,12 +44,12 @@ def time_string_to_seconds(time_string) -> float:
 
 def to_milliseconds(seconds):
     """Convert seconds to milliseconds"""
-    return seconds * 10**3
+    return seconds * 10 ** 3
 
 
 def to_microseconds(seconds):
     """Convert seconds to microseconds"""
-    return seconds * 10**6
+    return seconds * 10 ** 6
 
 
 def utc_timestamp() -> float:
@@ -58,18 +62,41 @@ def humanize_utc_timestamp(timestamp):
     return datetime.utcfromtimestamp(timestamp)
 
 
-def defer_cleanup(func) -> Callable:
-    """
-    Decorator to tell the experiment runner to only cleanup after the experiment has run
+def add_env_variable(compose_file_path, service_name, variable_name, variable_value):
+    """Add an environment variable with a given value to a service in a Docker Compose file"""
+    with open(compose_file_path, "r") as file:
+        compose_dict = yaml.safe_load(file)
 
-    We provide this decorator to allow deferred cleanup for some treatments where we cannot immediately
-    clean the treatment as this would disallow the treatment to function properly. For an example treatment
-    where this applies, check the PrometheusScrapeTreatment in treatments.py
-    """
+    if service_name not in compose_dict["services"]:
+        raise OxnException(explanation=f"Service {service_name} not found in Docker Compose file")
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
+    if "environment" not in compose_dict["services"][service_name]:
+        compose_dict["services"][service_name]["environment"] = {}
 
-    wrapper.defer_cleanup = True
-    return wrapper
+    environment = compose_dict["services"][service_name]["environment"]
+
+    if isinstance(environment, dict):
+        environment[variable_name] = variable_value
+    elif isinstance(environment, list):
+        environment.append(f"{variable_name}={variable_value}")
+    else:
+        raise OxnException(explanation="Environment field is neither a dictionary nor a list")
+
+    with open(compose_file_path, "w") as file:
+        yaml.safe_dump(compose_dict, file)
+
+
+def remove_env_variable(compose_file_path, service_name, variable_name, variable_value):
+    """Remove an environment variable from a service in a Docker Compose file"""
+    with open(compose_file_path, "r") as file:
+        compose_dict = yaml.safe_load(file)
+
+    if service_name not in compose_dict["services"]:
+        raise OxnException(explanation=f"Service {service_name} not found in Docker Compose file")
+
+    if "environment" in compose_dict["services"][service_name]:
+        idx = compose_dict["services"][service_name]["environment"].index(f"{variable_name}={variable_value}")
+        compose_dict["services"][service_name]["environment"].remove(idx)
+
+    with open(compose_file_path, "w") as file:
+        yaml.safe_dump(compose_dict, file)

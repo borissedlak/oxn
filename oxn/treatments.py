@@ -12,11 +12,13 @@ import requests
 from docker.errors import NotFound as ContainerNotFound
 from docker.errors import APIError as DockerAPIError
 
+from python_on_whales import DockerClient
+
 from oxn.utils import (
     time_string_to_seconds,
     validate_time_string,
     time_string_format_regex,
-    defer_cleanup,
+    add_env_variable, remove_env_variable, to_milliseconds,
 )
 from oxn.models.treatment import Treatment
 
@@ -68,6 +70,9 @@ class EmptyTreatment(Treatment):
     @property
     def action(self):
         return "empty"
+
+    def is_runtime(self):
+        return True
 
 
 class ByteMonkeyTreatment(Treatment):
@@ -276,6 +281,169 @@ class CorruptPacketTreatment(Treatment):
         self.config["duration_seconds"] = relative_time_seconds
 
 
+class MetricsExportIntervalTreatment(Treatment):
+    """
+    Modify the OTEL_METRICS_EXPORT interval for a given container
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.original_interval = None
+        # TODO: reuse the existing docker compose client
+        self.compose_client = DockerClient(
+            compose_files=[self.config.get("compose_file")]
+        )
+        self.docker_client = docker.from_env()
+
+    def action(self):
+        return "otel_metrics_interval"
+
+    def preconditions(self) -> bool:
+        # TODO: check proper preconditions
+        return True
+
+    def inject(self) -> None:
+        service = self.config.get("service_name")
+        compose_file = self.config.get("compose_file")
+        interval_ms = self.config.get("interval_ms")
+
+        add_env_variable(
+            compose_file_path=compose_file,
+            service_name=service,
+            variable_name="OTEL_METRIC_EXPORT_INTERVAL",
+            variable_value=str(interval_ms),
+        )
+
+    def clean(self) -> None:
+        compose_file = self.config.get("compose_file")
+        service_name = self.config.get("service_name")
+        interval_ms = self.config.get("interval_ms")
+        remove_env_variable(
+            compose_file_path=compose_file,
+            service_name=service_name,
+            variable_name="OTEL_METRICS_EXPORT_INTERVAL",
+            variable_value=interval_ms
+        )
+
+    def params(self) -> dict:
+        return {
+            "service_name": str,
+            "interval": str,
+        }
+
+    def _validate_params(self) -> bool:
+        for key, value in self.params().items():
+            if key not in self.config:
+                self.messages.append(f"Parameter {key} has to be supplied")
+            if not isinstance(self.config[key], value):
+                self.messages.append(f"Parameter {key} has to be of type {str(value)}")
+        for key in self.config.items():
+            if key == "percentage" and not 0 <= self.config[key] <= 100:
+                self.messages.append(
+                    f"Value for key {key} has to be in the range [0, 100] for {self.treatment_type}"
+                )
+            if key == "interval" and not validate_time_string(self.config[key]):
+                self.messages.append(
+                    f"Value for parameter {key} has to match {time_string_format_regex} for {self.treatment_type}"
+                )
+        return not self.messages
+
+    def _transform_params(self) -> None:
+        """Convert the provided time string into milliseconds"""
+        interval_s = time_string_to_seconds(self.config["interval"])
+        interval_ms = to_milliseconds(interval_s)
+        self.config["interval_ms"] = interval_ms
+
+    def is_runtime(self) -> bool:
+        return True
+
+
+class ProbabilisticSamplingTreatment(Treatment):
+    """
+    Add a probabilistic sampling policy to the opentelemetry collector
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.client = docker.from_env()
+
+    @property
+    def action(self):
+        return "probl"
+
+    def is_runtime(self) -> bool:
+        return False
+
+    def preconditions(self) -> bool:
+        # TODO: write tests to check if file exists
+        return True
+
+    def inject(self) -> None:
+        path = self.config.get("otelcol_extras")
+        # support only the base attributes for now
+        sampling_percentage = self.config.get("percentage")
+        seed = self.config.get("seed")
+        updated_extras = {
+            "processors": {
+                "probabilistic_sampler": {
+                    "hash_seed": seed,
+                    "sampling_percentage": sampling_percentage
+                }
+            },
+            "service": {
+                "pipelines": {
+                    "traces": {
+                        "processors": ["probabilistic_sampler"],
+                    }
+                }
+            },
+        }
+        with open(path, "w+") as file:
+            existing_config = yaml.safe_load(file.read())
+            if not existing_config:
+                existing_config = {}
+            existing_config.update(updated_extras)
+            yaml.dump(existing_config, file, default_flow_style=False)
+
+    def clean(self) -> None:
+        original_extras = self.config.get("otelcol_extras_yaml")
+        path = self.config.get("otelcol_extras")
+        with open(path, "w+") as file:
+            file.write(yaml.dump(original_extras, default_flow_style=False))
+
+    def params(self) -> dict:
+        return {
+            "otelcol_extras": str,
+            "percentage": int,
+            "seed": int,
+        }
+
+    def _validate_params(self) -> bool:
+        for key, value in self.params().items():
+            if key == "otelcol_extras" and key not in self.config:
+                self.messages.append(f"Key {key} is required for {self.treatment_type}")
+            if key == "percentage" and key not in self.config:
+                self.messages.append(f"Key {key} is required for {self.treatment_type}")
+            if key == "seed" and key not in self.config:
+                self.messages.append(f"Key {key} is required for {self.treatment_type}")
+            if key in self.config and not isinstance(self.config[key], value):
+                self.messages.append(f"Key {key} has to be of type {value} for {self.treatment_type}")
+        for key in self.config.items():
+            if key == "percentage" and not 0 <= self.config[key] <= 100:
+                self.messages.append(
+                    f"Value for key {key} has to be in the range [0, 100] for {self.treatment_type}"
+                )
+        return not self.messages
+
+    def _transform_params(self) -> None:
+        path = self.config.get("otelcol_extras")
+        with open(path, "r") as file:
+            contents = yaml.safe_load(file.read())
+            if not contents:
+                contents = {}
+            self.config["otelcol_extras_yaml"] = contents
+
+
 class TailSamplingTreatment(Treatment):
     """
     Add a tracing tail sampling policy to the OpenTelemetry collector
@@ -291,6 +459,9 @@ class TailSamplingTreatment(Treatment):
     @property
     def action(self):
         return "tail"
+
+    def is_runtime(self) -> bool:
+        return True
 
     def preconditions(self) -> bool:
         """
@@ -328,7 +499,6 @@ class TailSamplingTreatment(Treatment):
                 }
             },
         }
-        # TODO: the current method is very blunt and assumes empty extras
         with open(path, "w+") as file:
             file.write(yaml.dump(updated_extras, default_flow_style=False))
 
@@ -343,7 +513,6 @@ class TailSamplingTreatment(Treatment):
             seconds = time_string_to_seconds(duration)
             time.sleep(seconds)
 
-    @defer_cleanup
     def clean(self) -> None:
         original_extras = self.config.get("otelcol_extras_yaml")
         path = self.config.get("otelcol_extras")
@@ -374,145 +543,14 @@ class TailSamplingTreatment(Treatment):
             self.config["otelcol_extras_yaml"] = contents
 
 
-class PropbalisticSamplingTreatment(Treatment):
-    """
-    Add change ProbalisticSampling Treatmentes for Tracing
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.client = docker.from_env()
-
-    @property
-    def action(self):
-        return "probl"
-
-    def preconditions(self) -> bool:
-        """
-        Check that the collector exists and is running
-
-        Not implemented yet
-        """
-        return True
-
-    def inject(self) -> None:
-        """Write the policy to the otelcol-extras file"""
-        path = self.config.get("otelcol_extras")
-        # get existing configuration
-        sampling_percentage = self.config.get("sampling_percentage",1)
-        # inject the policy
-        updated_extras = {
-            "processors": {
-                "probabilistic_sampler": {
-                    "hash_seed": "22",
-                    "sampling_percentage": sampling_percentage,
-                }
-            },
-            "service": {
-                "pipelines": {
-                    "traces": {
-                        "processors": ["probabilistic_sampler"],
-                    }
-                }
-            },
-        }
-        # TODO: the current method is very blunt and assumes empty extras
-        with open(path, "w+") as file:
-            file.write(yaml.dump(updated_extras, default_flow_style=False))
-
-        # restart the collector and block until it has restarted
-        container = self.client.containers.get("otel-col")
-        container.stop()
-        container.wait()
-        container.start()
-
-        duration = self.config.get("duration", "0m")
-        if duration:
-            seconds = time_string_to_seconds(duration)
-            time.sleep(seconds)
-
-    @defer_cleanup
-    def clean(self) -> None:
-        original_extras = self.config.get("otelcol_extras_yaml")
-        path = self.config.get("otelcol_extras")
-        with open(path, "w+") as file:
-            file.write(yaml.dump(original_extras, default_flow_style=False))
-
-    def params(self) -> dict:
-        return {
-            "otelcol_extras": str,
-            "sampling_percentage": int,
-            "decision_wait": str
-        }
-
-    def _validate_params(self) -> bool:
-        # TODO: implement the method
-        return True
-
-    def _transform_params(self) -> None:
-        path = self.config.get("otelcol_extras")
-        with open(path, "r") as file:
-            contents = yaml.safe_load(file.read())
-            if not contents:
-                contents = {}
-            self.config["otelcol_extras_yaml"] = contents
-
-
-class OtelSamplingRateTreatment(Treatment):
-    """
-     Change the OTEL SamplingRate of a specifc service.
-     We assume that the container is reloading the /etc/enviromnt file on restart.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.client = docker.from_env()
-    
-    @defer_cleanup
-    def clean(self) -> None:
-        service_name = self.config.get("service_name")
-        container = self.client.containers.get(service_name)
-        code = container.exec_run(["sh","-c",'"" > /etc/environment'],stdout=False,
-        stderr=False)
-        print(code)
-        container.restart()
-
-
-    def _validate_params(self) -> bool:
-        # needs implementation
-        return True
-
-    def inject(self) -> None:
-        service_name = self.config.get("service_name")
-        export_interval_ms = self.config.get("export_interval_ms",60000)
-        container = self.client.containers.get(service_name)
-        code = container.exec_run(["sh","-c",f"echo \"OTEL_METRIC_EXPORT_INTERVAL={export_interval_ms}\" > /etc/environment "],stdout=False,
-        stderr=False)
-        logger.info(f"injected new otel config {code} in {service_name}")
-        container.stop()
-        container.wait()
-        container.start()
-
-    def params(self) -> dict:
-        return {
-            "service_name": str,
-            "export_interval_ms": int
-        }
-
-    def preconditions(self) -> bool:
-        return True
-    
-    def _transform_params(self) -> None:
-        pass
-
-    @property
-    def action(self):
-        return "otel"
-
-
 class PauseTreatment(Treatment):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = docker.from_env()
+
+    def is_runtime(self) -> bool:
+        return True
 
     @property
     def action(self):
@@ -614,6 +652,9 @@ class NetworkDelayTreatment(Treatment):
         self.client = docker.from_env()
 
     action = "delay"
+
+    def is_runtime(self) -> bool:
+        return True
 
     def _validate_params(self) -> bool:
         for key, val in self.params().items():
@@ -748,6 +789,9 @@ class PacketLossTreatment(Treatment):
         self.client = docker.from_env()
 
     action = "loss"
+
+    def is_runtime(self) -> bool:
+        return True
 
     def params(self) -> dict:
         return {
@@ -947,6 +991,9 @@ class KillTreatment(Treatment):
         relative_time_seconds = time_string_to_seconds(relative_time_string)
         self.config |= {"duration_seconds": relative_time_seconds}
 
+    def is_runtime(self) -> bool:
+        return True
+
 
 class PacketReorderTreatment(Treatment):
     """
@@ -997,7 +1044,6 @@ class PrometheusIntervalTreatment(Treatment):
         # TODO: infer the url from docker compose file or have it be user provided
         requests.post("http://localhost:9090/-/reload")
 
-    @defer_cleanup
     def clean(self) -> None:
         prometheus_yaml = self.config.get("prometheus_yaml")
         prometheus_yaml["global"]["scrape_interval"] = self.config.get(
@@ -1054,6 +1100,9 @@ class PrometheusIntervalTreatment(Treatment):
     @property
     def action(self):
         return "sampling"
+
+    def is_runtime(self) -> bool:
+        return False
 
 
 class StressTreatment(Treatment):
@@ -1159,3 +1208,6 @@ class StressTreatment(Treatment):
             for stressor_name, stressor_count in self.config["stressors"].items():
                 prefixed_stressor = f"--{stressor_name}"
                 self.stressors[prefixed_stressor] = str(stressor_count)
+
+    def is_runtime(self) -> bool:
+        return False

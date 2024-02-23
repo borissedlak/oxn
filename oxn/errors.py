@@ -1,7 +1,7 @@
 class OxnException(Exception):
     """Custom exception subclass to represent errors arising from oxn to enforce system boundaries"""
 
-    def __init__(self, message=None, explanation=None):
+    def __init__(self, message: object = None, explanation: object = None) -> object:
         """Provide additional exception explanation"""
         super(OxnException, self).__init__(message)
         self.explanation = explanation

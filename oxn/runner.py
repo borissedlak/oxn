@@ -5,6 +5,7 @@ import time
 import uuid
 import hashlib
 import datetime
+from typing import List
 
 import psutil
 
@@ -20,8 +21,8 @@ from .treatments import (
     StressTreatment,
     TailSamplingTreatment,
     KillTreatment,
-    PropbalisticSamplingTreatment,
-    OtelSamplingRateTreatment,
+    MetricsExportIntervalTreatment,
+    ProbabilisticSamplingTreatment
 )
 from . import utils
 from .observer import Observer
@@ -43,7 +44,7 @@ class ExperimentRunner:
     The runner additionally waits for the specified time intervals depending on experiment configuration.
 
     """
-
+    # TODO: make names less ambiguous
     treatment_keys = {
         "kill": KillTreatment,
         "pause": PauseTreatment,
@@ -53,17 +54,17 @@ class ExperimentRunner:
         "stress": StressTreatment,
         "sampling": PrometheusIntervalTreatment,
         "tail": TailSamplingTreatment,
-        "otel": OtelSamplingRateTreatment,
-        "probl": PropbalisticSamplingTreatment,
+        "probl": ProbabilisticSamplingTreatment,
+        "otel_metrics_interval": MetricsExportIntervalTreatment,
     }
 
     def __init__(
-        self,
-        config=None,
-        config_filename=None,
-        additional_treatments=None,
-        random_treatment_order=False,
-        accountant_names=None,
+            self,
+            config=None,
+            config_filename=None,
+            additional_treatments=None,
+            random_treatment_order=False,
+            accountant_names=None,
     ):
         self.config = config
         """Experiment specification dict"""
@@ -143,6 +144,7 @@ class ExperimentRunner:
             self.treatments[key] = self._build_treatment(
                 action=action, params=params, name=key
             )
+            logger.debug("Successfully built treatment %s", self.treatments[key])
 
     def _build_treatment(self, action, params, name) -> Treatment:
         """Build a single treatment from a description"""
@@ -154,6 +156,7 @@ class ExperimentRunner:
                 message=f"Error while building treatment {name}",
                 explanation=f"Treatment key {action} does not exist in the treatment library",
             )
+        # TODO: move this out of the method. has to be called from the engine because the engine knows when services are ready
         if not instance.preconditions():
             raise OxnException(
                 message=f"Error while checking preconditions for treatment {name}",
@@ -166,41 +169,48 @@ class ExperimentRunner:
         for treatment in self.additional_treatments:
             self.treatment_keys |= {treatment.action: treatment}
 
-    def execute(self) -> None:
+    def _get_runtime_treatments(self) -> List[Treatment]:
+        return [
+            treatment for treatment in self.treatments.values()
+            if treatment.is_runtime()
+        ]
+
+    def _get_compile_time_treatments(self) -> List[Treatment]:
+        return [
+            treatment for treatment in self.treatments.values()
+            if not treatment.is_runtime()
+        ]
+
+    def execute_compile_time_treatments(self) -> None:
+        """Execute runtime treatments"""
+        logger.info("Starting compile time treatments")
+        for treatment in self._get_compile_time_treatments():
+            treatment.start = utc_timestamp()
+            treatment.inject()
+
+    def clean_compile_time_treatments(self) -> None:
+        logger.info("Cleaning compile time treatments")
+        for treatment in self._get_compile_time_treatments():
+            treatment.end = utc_timestamp()
+            treatment.clean()
+
+    def execute_runtime_treatments(self) -> None:
         """
         Execute one run of the experiment
         A single experiment run is defined as one execution of all treatments and one observation of all responses
         """
-        self.experiment_start = utc_timestamp()
-        self.observer.experiment_start = self.experiment_start
         if self.accountant:
             self.accountant.read_all_containers()
             self.accountant.read_oxn()
         ttw_left = self.observer.time_to_wait_left()
         logger.info(f"Sleeping for {ttw_left} seconds")
         time.sleep(ttw_left)
-        logger.info(f"Starting treatments")
-        for treatment in self.treatments.values():
+        logger.info(f"Starting runtime treatments")
+        for treatment in self._get_runtime_treatments():
             treatment.start = utc_timestamp()
-            logger.debug(
-                f"Treatment {treatment.name}: Start time {treatment.humanize_start_time}"
-            )
             treatment.inject()
-            if not hasattr(treatment.clean, "defer_cleanup"):
-                treatment.clean()
-                treatment.end = utc_timestamp()
-                logger.debug(
-                    f"Treatment {treatment.name}: End time {treatment.humanize_end_time}"
-                )
-            else:
-                logger.debug(f"Deferred cleaning of treatment {treatment.name}")
-        for treatment in self.treatments.values():
-            if hasattr(treatment.clean, "defer_cleanup"):
-                treatment.clean()
-                treatment.end = utc_timestamp()
-                logging.info(
-                    f"Treatment {treatment.name}: End time {treatment.humanize_end_time}"
-                )
+            treatment.clean()
+            treatment.end = utc_timestamp()
         self.experiment_end = utc_timestamp()
         self.observer.experiment_end = self.experiment_end
         logger.info(f"Injected treatments")

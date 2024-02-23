@@ -47,7 +47,7 @@ def main():
     except JaegerException as jaeger_expcetion:
         logger.error(f"JaegerException: {jaeger_expcetion}")
     except OxnException as oxn_exception:
-        logger.error(f"OxnExcpetion: {oxn_exception}")
+        logger.error(f"OxnException: {oxn_exception}")
     except KeyboardInterrupt:
         logger.info("Trying to shut down gracefully. Press ctrl-c to force")
     finally:
@@ -55,5 +55,6 @@ def main():
             engine.generator.kill()
             logger.info("Shut down load generation")
         if engine.sue_running:
+            # TODO: call cleanup methods here
             engine.orchestrator.teardown()
             logger.info("Shut down sue")
