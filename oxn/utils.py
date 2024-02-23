@@ -71,16 +71,19 @@ def add_env_variable(compose_file_path, service_name, variable_name, variable_va
         raise OxnException(explanation=f"Service {service_name} not found in Docker Compose file")
 
     if "environment" not in compose_dict["services"][service_name]:
-        compose_dict["services"][service_name]["environment"] = {}
+        compose_dict["services"][service_name]["environment"] = []
 
     environment = compose_dict["services"][service_name]["environment"]
-
-    if isinstance(environment, dict):
-        environment[variable_name] = variable_value
-    elif isinstance(environment, list):
-        environment.append(f"{variable_name}={variable_value}")
+    exists = False
+    if isinstance(environment, list):
+        for idx, env_var in enumerate(environment):
+            if env_var.startswith(f"{variable_name}="):
+                environment[idx] = f"{variable_name}={variable_value}"
+                exists = True
+        if not exists:
+            environment.append(f"{variable_name}={variable_value}")
     else:
-        raise OxnException(explanation="Environment field is neither a dictionary nor a list")
+        raise OxnException(explanation="Environment field for %s is not a list" % service_name)
 
     with open(compose_file_path, "w") as file:
         yaml.safe_dump(compose_dict, file)

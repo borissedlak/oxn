@@ -280,6 +280,9 @@ class CorruptPacketTreatment(Treatment):
         relative_time_seconds = time_string_to_seconds(relative_time_string)
         self.config["duration_seconds"] = relative_time_seconds
 
+    def is_runtime(self) -> bool:
+        return True
+
 
 class MetricsExportIntervalTreatment(Treatment):
     """
@@ -288,7 +291,7 @@ class MetricsExportIntervalTreatment(Treatment):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.original_interval = None
+        self.original_yaml = None
         # TODO: reuse the existing docker compose client
         self.compose_client = DockerClient(
             compose_files=[self.config.get("compose_file")]
@@ -315,15 +318,10 @@ class MetricsExportIntervalTreatment(Treatment):
         )
 
     def clean(self) -> None:
-        compose_file = self.config.get("compose_file")
-        service_name = self.config.get("service_name")
-        interval_ms = self.config.get("interval_ms")
-        remove_env_variable(
-            compose_file_path=compose_file,
-            service_name=service_name,
-            variable_name="OTEL_METRICS_EXPORT_INTERVAL",
-            variable_value=interval_ms
-        )
+        original_compose_file = self.config["original_yaml"]
+        compose_file_path = self.config.get("compose_file")
+        with open(compose_file_path, "w+") as file:
+            file.write(yaml.safe_dump(original_compose_file, default_flow_style=False))
 
     def params(self) -> dict:
         return {
@@ -354,8 +352,12 @@ class MetricsExportIntervalTreatment(Treatment):
         interval_ms = to_milliseconds(interval_s)
         self.config["interval_ms"] = interval_ms
 
+        compose_file_path = self.config.get("compose_file")
+        with open(compose_file_path, "r") as file:
+            self.config["original_yaml"] = yaml.safe_load(file.read())
+
     def is_runtime(self) -> bool:
-        return True
+        return False
 
 
 class ProbabilisticSamplingTreatment(Treatment):

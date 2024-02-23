@@ -156,12 +156,6 @@ class ExperimentRunner:
                 message=f"Error while building treatment {name}",
                 explanation=f"Treatment key {action} does not exist in the treatment library",
             )
-        # TODO: move this out of the method. has to be called from the engine because the engine knows when services are ready
-        if not instance.preconditions():
-            raise OxnException(
-                message=f"Error while checking preconditions for treatment {name}",
-                explanation="\n".join(instance.messages),
-            )
         return instance
 
     def _extend_treatments(self) -> None:
