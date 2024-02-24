@@ -416,10 +416,10 @@ class Interaction:
         response_df.start_time = pd.to_datetime(response_df.start_time, unit="us")
         response_df.end_time = pd.to_datetime(response_df.end_time, unit="us")
         if color_services:
-            sns.lineplot(ax=ax, x=response_df.start_time, y=response_df.duration, color="b",
+            sns.scatterplot(ax=ax, x=response_df.start_time, y=response_df.duration, color="b",
                          hue=response_df.service_name)
         else:
-            sns.lineplot(ax=ax, x=response_df.start_time, y=response_df.duration, color="b")
+            sns.scatterplot(ax=ax, x=response_df.start_time, y=response_df.duration, color="b")
         ax.set(xlabel="")
         ax.set(ylabel="Duration [us]")
         ax.set(title="Trace Duration")
