@@ -325,6 +325,7 @@ class MetricsExportIntervalTreatment(Treatment):
 
     def params(self) -> dict:
         return {
+            "compose_file": str,
             "service_name": str,
             "interval": str,
         }

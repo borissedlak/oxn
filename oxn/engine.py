@@ -122,6 +122,9 @@ class Engine:
             self.runner.observer.experiment_start = experiment_start
             self.runner.execute_runtime_treatments()
             self.runner.clean_compile_time_treatments()
+            self.runner.experiment_end = utc_timestamp()
+            self.runner.observer.experiment_end = self.runner.experiment_end
+            self.runner.observe_response_variables()
             self.generator.stop()
             self.loadgen_running = False
             logger.info("Stopped load generation")

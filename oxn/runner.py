@@ -205,9 +205,9 @@ class ExperimentRunner:
             treatment.inject()
             treatment.clean()
             treatment.end = utc_timestamp()
-        self.experiment_end = utc_timestamp()
-        self.observer.experiment_end = self.experiment_end
         logger.info(f"Injected treatments")
+
+    def observe_response_variables(self) -> None:
         self.observer.initialize_variables()
         ttw_right = self.observer.time_to_wait_right()
         logger.info(f"Sleeping for {ttw_right} seconds")
