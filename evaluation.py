@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 """Evaluate experiment reports created by oxn"""
 import itertools
+from typing import List
+
 # TODO: figure out a way to use multiple feature columns
 # TODO: handle multiple interactions
 # TODO: refactor trace/metric models common functionality into base class
@@ -26,6 +28,7 @@ import numpy as np
 import pandas as pd
 import yaml
 import seaborn as sns
+import matplotlib.gridspec as gridspec
 from matplotlib import pyplot as plt
 from oxn.store import get_dataframe
 
@@ -60,7 +63,8 @@ class TraceModel:
         x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
         x_train = scaler.fit_transform(x_train)
         x_test = scaler.transform(x_test)
-        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", n_jobs=-1, cv=folds, scoring=self.score)
+        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", n_jobs=-1, cv=folds,
+                                          scoring=self.score)
         classifier.fit(x_train, y_train)
         self.x_train = x_train
         self.x_test = x_test
@@ -111,7 +115,7 @@ class TraceModel:
 
     def plot_confusion_matrix(self, write=False):
         cm = confusion_matrix(self.y_test, self.predictions)
-        plt.figure(figsize=(5, 5))
+        plt.figure(figsize=(6, 4))
         sns.heatmap(cm, annot=True, fmt=".0f", linewidths=.5, square=True, cmap='Blues_r')
         plt.ylabel("Actual")
         plt.xlabel("Predicted")
@@ -127,7 +131,6 @@ class TraceModel:
         plt.xlabel('Recall')
         plt.ylabel('Precision')
         plt.title('Precision-Recall Curve')
-        plt.legend(loc="lower left")
         plt.show(block=False)
         if write:
             plt.savefig(f"prcurve_{self.feature_columns}_{self.label_column}.png")
@@ -217,7 +220,8 @@ class MetricModel:
         x_train, x_test, y_train, y_test = train_test_split(x_resampled, y_resampled, test_size=split)
         x_train = scaler.fit_transform(x_train)
         x_test = scaler.transform(x_test)
-        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", cv=folds, scoring=self.score, n_jobs=-1)
+        classifier = LogisticRegressionCV(solver="newton-cholesky", penalty="l2", cv=folds, scoring=self.score,
+                                          n_jobs=-1)
         classifier.fit(x_train, y_train)
         self.x_train = x_train
         self.x_test = x_test
@@ -406,9 +410,8 @@ class Interaction:
         if self.response_type == "MetricResponseVariable":
             return self.get_metric_model(score=score)
 
-    def plot_trace_interaction(self, color_services=False, write=False):
+    def plot_trace_interaction(self, ax=None, color_services=False, write=False):
         """Plot a treatment-response interaction for a trace response variable"""
-        fig, ax = plt.subplots(figsize=(5, 5))
         response_df = self.response_data
         response_df.start_time = pd.to_datetime(response_df.start_time, unit="us")
         response_df.end_time = pd.to_datetime(response_df.end_time, unit="us")
@@ -417,46 +420,43 @@ class Interaction:
                          hue=response_df.service_name)
         else:
             sns.lineplot(ax=ax, x=response_df.start_time, y=response_df.duration, color="b")
-        ax.set(xlabel="timestamp")
-        ax.set(ylabel="Duration (us)")
-        ax.set(title=f"{self.treatment_name} [spans]")
-        ax.axvline(x=pd.to_datetime(self.treatment_start), color="r", linewidth=1)
-        ax.axvline(x=pd.to_datetime(self.treatment_end), color="r", linewidth=1)
+        ax.set(xlabel="")
+        ax.set(ylabel="Duration [us]")
+        ax.set(title="Trace Duration")
+        ax.axvline(x=pd.to_datetime(self.treatment_start), color="gray", linewidth=1, linestyle="--", label="t0")
+        ax.axvline(x=pd.to_datetime(self.treatment_end), color="gray", linewidth=1, linestyle="--", label="t1")
+
+        ax.set_xticks([pd.to_datetime(self.treatment_start), pd.to_datetime(self.treatment_end)])
+        ax.set_xticklabels(["t0", "t1"])
+
         sns.despine(ax=ax)
-        plt.xticks(rotation=90)
-        plt.show(block=False)
         if write:
             plt.savefig(f"{self.treatment_name}_{self.response_name}.png")
 
-    def plot_metric_interaction(self, write=False):
+    def plot_metric_interaction(self, ax=None, write=False):
         """Plot a treatment-response interaction for a metric response variable"""
-        fig, ax = plt.subplots(figsize=(5, 5))
         response_df = self.response_data
         metric_name = self.get_metric_name()
         sns.lineplot(ax=ax, x=response_df.index, y=response_df[metric_name])
-        ax.set(title=f"{self.treatment_name} [{metric_name}]")
-        ax.set(ylabel=f"{metric_name}")
-        ax.set(xlabel=f"timestamp")
-        plt.text(
-            0.1,
-            0.9,
-            f"pvalue: {self.p_value}\ntest statistic: {self.test_statistic}",
-            transform=plt.gca().transAxes,
-            bbox=dict(facecolor="white", alpha=0.5)
-        )
-        ax.axvline(x=pd.to_datetime(self.treatment_start), color="r", linewidth=1)
-        ax.axvline(x=pd.to_datetime(self.treatment_end), color="r", linewidth=1)
+        ax.set(title=f"{metric_name}")
+        ax.set(ylabel="")
+        ax.set(xlabel="")
+        ax.axvline(x=pd.to_datetime(self.treatment_start), color="gray", linewidth=1, linestyle="--", label="t0")
+        ax.axvline(x=pd.to_datetime(self.treatment_end), color="gray", linewidth=1, linestyle="--", label="t1")
+        ax.set_xticks([pd.to_datetime(self.treatment_start), pd.to_datetime(self.treatment_end)])
+        ax.set_xticklabels(["t0", "t1"])
         sns.despine(ax=ax)
-        plt.show(block=False)
         if write:
             plt.savefig(f"{self.treatment_name}_{self.response_name}.png")
 
-    def plot_interaction(self, color_services=False, write=False):
+    def plot_interaction(self, ax=None, color_services=False, write=False):
         """Plot a response-treatment interaction depending on the type of response variable observed"""
+        if not ax:
+            fig, ax = plt.subplots(figsize=(5, 5))
         if self.response_type == "TraceResponseVariable":
-            self.plot_trace_interaction(color_services=color_services, write=write)
+            self.plot_trace_interaction(ax=ax, color_services=color_services, write=write)
         if self.response_type == "MetricResponseVariable":
-            self.plot_metric_interaction(write=write)
+            self.plot_metric_interaction(ax=ax, write=write)
 
     def trace_durations(self):
         """
@@ -562,8 +562,71 @@ class Report:
         self.runs = [Run(run_key=run_key, run_data=run_data) for run_key, run_data in
                      data["report"]["runs"].items()]
 
+    def plot_interaction_grid(self, rows, cols, interactions=None):
+        n = len(interactions)
+
+        valid_interactions = [i for i in range(len(self.interactions))]
+        if not interactions:
+            interactions = valid_interactions
+
+        if rows * cols < n:
+            raise ValueError("Not enough rows or columns to display all interactions")
+        if rows > n:
+            raise ValueError("Not enough interactions to fill all rows")
+        if cols > n:
+            raise ValueError("Not enough interactions to fill all columns")
+        if n > len(self.interactions):
+            raise ValueError("Interactions available %s" % valid_interactions)
+
+        for idx in interactions:
+            if idx < 0 or idx >= len(self.interactions):
+                raise ValueError(
+                    "Invalid interaction provided: %s. Available interactions %s " % (idx, valid_interactions))
+
+        fig = plt.figure(figsize=(cols * 4, rows * 4))
+        gs = gridspec.GridSpec(rows, cols)
+
+        for idx, interaction_idx in enumerate(interactions):
+            interaction = self.interactions[interaction_idx]
+            col_idx = idx // rows
+            row_idx = idx % rows
+            ax = fig.add_subplot(gs[row_idx, col_idx])
+            interaction.plot_interaction(ax=ax)
+
+        fig.suptitle(self.experiment_name)
+        plt.tight_layout()
+        plt.show(block=False)
+
+    def get_visibility_df(self, classifier="LR", score="f1", use_traces=False, split=0.3, folds=2) -> pd.DataFrame:
+        interaction_data = []
+        for interaction in self.interactions:
+            interaction_model = interaction.get_model(score=score, use_traces=use_traces)
+            if classifier == "GBT":
+                interaction_model.build_gb(split=split)
+            if classifier == "LR":
+                interaction_model.build_lr(split=split, folds=folds)
+            interaction_data.append([
+                self.experiment_name,
+                interaction.treatment_name,
+                interaction.treatment_type,
+                interaction.response_name,
+                interaction.response_type,
+                classifier,
+                interaction_model.visibility_score()])
+        columns = [
+            "report",
+            "treatment_name",
+            "treatment_type",
+            "response_name",
+            "response_type",
+            "classifier",
+            f"visibility[{score}]"
+        ]
+        df = pd.DataFrame(interaction_data, columns=columns)
+        return df
+
     @property
-    def interactions(self):
+    def interactions(self) -> List[Interaction]:
         """Concatenate all the interactions from each run"""
         interactions = []
         for run in self.runs:
