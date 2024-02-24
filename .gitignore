@@ -23,4 +23,3 @@ visibility_reports/*
 evaluation.py
 *.h5
 *.pickle
-*.ipynb
