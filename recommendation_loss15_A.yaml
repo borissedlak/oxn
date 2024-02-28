@@ -1,0 +1,102 @@
+report:
+  runs:
+    f5fcf694:
+      interactions:
+        interaction_0:
+          treatment_name: packet_loss_treatment
+          treatment_start: 2024-02-28 06:39:32.298617
+          treatment_end: 2024-02-28 06:41:32.509605
+          treatment_type: PacketLossTreatment
+          response_name: recommendations_total
+          response_start: 2024-02-28 06:31:32.296801
+          response_end: 2024-02-28 06:45:32.551057
+          response_type: MetricResponseVariable
+          p_value: '7.312008020589557e-10'
+          test_statistic: '6.276307324928116'
+          test_performed: welch t-test
+          store_key: experiments/recommendation_loss15_A.yml/f5fcf694/recommendations_total
+        interaction_1:
+          treatment_name: interval
+          treatment_start: 2024-02-28 06:35:02.488923
+          treatment_end: 2024-02-28 06:41:32.510164
+          treatment_type: MetricsExportIntervalTreatment
+          response_name: recommendations_total
+          response_start: 2024-02-28 06:31:32.296801
+          response_end: 2024-02-28 06:45:32.551057
+          response_type: MetricResponseVariable
+          p_value: '9.803551192398994e-30'
+          test_statistic: '-12.391757104443608'
+          test_performed: welch t-test
+          store_key: experiments/recommendation_loss15_A.yml/f5fcf694/recommendations_total
+      loadgen:
+        loadgen_start_time: 2024-02-28 06:35:32.298483
+        loadgen_end_time: 2024-02-28 06:45:32.536067
+        loadgen_total_requests: 162876
+        loadgen_total_failures: 3399
+        task_details:
+          f27686ea93764020:
+            url: /api/cart
+            verb: POST
+            requests: 14573
+            failures: 305
+            fail_ratio: 0.02092911548754546
+            sum_response_time: 3040967
+            min_response_time: 1
+            max_response_time: 1318
+            avg_response_time: 208.67130995676936
+            median_response_time: 220
+          bf74259b0deb4301:
+            url: /api/cart
+            verb: GET
+            requests: 22104
+            failures: 445
+            fail_ratio: 0.020132102786825912
+            sum_response_time: 3383834
+            min_response_time: 1
+            max_response_time: 1254
+            avg_response_time: 153.08695258776692
+            median_response_time: 160
+          2fcc83df36784969:
+            url: /api/products/0PUK6V6EV0
+            verb: GET
+            requests: 74028
+            failures: 1543
+            fail_ratio: 0.020843464635002973
+            sum_response_time: 7924172
+            min_response_time: 1
+            max_response_time: 874
+            avg_response_time: 107.04290268547037
+            median_response_time: 110
+          a7162cc05019452a:
+            url: /api/data
+            verb: GET
+            requests: 22291
+            failures: 481
+            fail_ratio: 0.021578215423264994
+            sum_response_time: 3705761
+            min_response_time: 2
+            max_response_time: 1885
+            avg_response_time: 166.244717599031
+            median_response_time: 170
+          17eaae93d3a74fac:
+            url: /api/recommendations
+            verb: GET
+            requests: 22461
+            failures: 477
+            fail_ratio: 0.021236810471483906
+            sum_response_time: 10062311
+            min_response_time: 1
+            max_response_time: 3778
+            avg_response_time: 447.990338809492
+            median_response_time: 360
+          27a13f6c75df4385:
+            url: /
+            verb: GET
+            requests: 7419
+            failures: 148
+            fail_ratio: 0.019948780159051084
+            sum_response_time: 1735314
+            min_response_time: 2
+            max_response_time: 1195
+            avg_response_time: 233.90133441164576
+            median_response_time: 240

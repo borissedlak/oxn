@@ -314,7 +314,7 @@ class MetricsExportIntervalTreatment(Treatment):
             compose_file_path=compose_file,
             service_name=service,
             variable_name="OTEL_METRIC_EXPORT_INTERVAL",
-            variable_value=str(interval_ms),
+            variable_value=str(int(interval_ms)),
         )
 
     def clean(self) -> None:

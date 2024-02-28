@@ -1,8 +1,15 @@
+# injects a 120s pause in the recomendation service
 experiment:
   responses:
     - frontend_traces:
         type: trace
         service_name: frontend 
+        left_window: 240s 
+        right_window: 240s 
+        limit: 100000
+    - recommendation_traces:
+        type: trace
+        service_name: recommendationservice 
         left_window: 240s 
         right_window: 240s 
         limit: 100000
@@ -14,7 +21,7 @@ experiment:
         step: 1
     - recommendations_total:
         type: metric
-        metric_name: increase(app_recommendations_counter_total[1m])
+        metric_name: increase(app_recommendations_counter_total[90s])
         left_window: 240s 
         right_window: 240s
         step: 1
