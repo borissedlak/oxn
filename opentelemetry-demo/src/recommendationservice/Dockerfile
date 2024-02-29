@@ -36,6 +36,12 @@ WORKDIR /usr/src/app/
 COPY --from=builder /reqs /usr/local
 COPY --from=grpc-builder /usr/src/app/ .
 COPY ./src/recommendationservice/ ./
+RUN pip install --upgrade pip
+RUN pip install -r ./requirements.txt
+
+# MODIFIED BY AUTHOR: install iproute2 package for tc netem
+# MODIFIED BY AUTHOR: install stress package for stress testing
+RUN apt-get update && apt-get -y install iproute2 stress stress-ng
 
 RUN opentelemetry-bootstrap -a install
 
