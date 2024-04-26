@@ -644,7 +644,7 @@ class Report:
             for detail in accounting_details:
                 data.append([run.id, detail.id, detail.cpu_seconds, detail.number_of_cpus])
         performance_df = pd.DataFrame.from_records(data)
-        performance_df.columns = header
+        # performance_df.columns = header
         return performance_df
 
     @property

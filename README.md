@@ -33,6 +33,7 @@ OXN automates every step of the experiment process in a straightforward manner, 
 
 3. Verify the demo application is working by visiting
 
+#TODO: Check what metrics there are
 * ```http:localhost:8080/``` for the Webstore
 * ```http:localhost:8080/jaeger/ui``` for Jaeger
 * ```http:localhost:9090``` for Prometheus
